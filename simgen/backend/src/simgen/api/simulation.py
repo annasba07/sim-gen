@@ -373,7 +373,7 @@ async def submit_feedback(
 
 @router.post("/sketch-generate", response_model=SketchTestResponse)
 async def generate_from_sketch(request: SketchGenerationRequest):
-    """Generate physics simulation from sketch + optional text prompt."""
+    """Generate physics simulation from sketch + optional text prompt with optimized parallel processing."""
     
     import base64
     import time
@@ -381,17 +381,13 @@ async def generate_from_sketch(request: SketchGenerationRequest):
     start_time = time.time()
     
     try:
-        # Import the new services
-        from ..services.sketch_analyzer import get_sketch_analyzer
-        from ..services.multimodal_enhancer import get_multimodal_enhancer
-        from ..services.simulation_generator import SimulationGenerator
+        # Import optimized services
+        from ..services.performance_optimizer import get_performance_pipeline
         from ..services.llm_client import get_llm_client
         
-        # Initialize services
-        sketch_analyzer = get_sketch_analyzer()
-        multimodal_enhancer = get_multimodal_enhancer()
+        # Initialize high-performance pipeline
         llm_client = get_llm_client()
-        sim_generator = SimulationGenerator(llm_client)
+        performance_pipeline = get_performance_pipeline(llm_client)
         
         # Decode the sketch image
         try:
@@ -410,12 +406,17 @@ async def generate_from_sketch(request: SketchGenerationRequest):
                 error=f"Invalid sketch data: {str(e)}"
             )
         
-        # Step 1: Analyze the sketch
-        sketch_analysis = await sketch_analyzer.analyze_sketch(
+        # 🚀 HIGH-PERFORMANCE PARALLEL PIPELINE
+        # Runs sketch analysis + text preprocessing in parallel
+        # Includes intelligent caching and performance tracking
+        sketch_analysis, enhanced_result, generation_result, metrics = await performance_pipeline.generate_optimized(
             image_data=image_bytes,
-            user_text=request.prompt
+            user_text=request.prompt,
+            style_preferences=request.style_preferences,
+            session_id=str(uuid.uuid4())  # Generate session ID for tracking
         )
         
+        # Prepare response data structures
         sketch_response = None
         if sketch_analysis.success:
             sketch_response = SketchAnalysisResponse(
@@ -428,13 +429,6 @@ async def generate_from_sketch(request: SketchGenerationRequest):
                 error_message=sketch_analysis.error_message
             )
         
-        # Step 2: Enhance prompt with multi-modal combination
-        enhanced_result = await multimodal_enhancer.enhance_prompt(
-            sketch_analysis=sketch_analysis,
-            user_text=request.prompt,
-            style_preferences=request.style_preferences
-        )
-        
         multimodal_response = None
         if enhanced_result.success:
             multimodal_response = MultiModalResponse(
@@ -443,15 +437,6 @@ async def generate_from_sketch(request: SketchGenerationRequest):
                 sketch_contribution=enhanced_result.sketch_contribution,
                 text_contribution=enhanced_result.text_contribution,
                 confidence_score=enhanced_result.confidence_score
-            )
-        
-        # Step 3: Generate simulation from enhanced prompt
-        generation_result = None
-        if enhanced_result.success:
-            # Use the enhanced prompt for simulation generation
-            generation_result = await sim_generator.generate_simulation(
-                entities=enhanced_result.combined_entities,
-                prompt=enhanced_result.enhanced_prompt
             )
         
         # Prepare generation result data
@@ -467,12 +452,22 @@ async def generate_from_sketch(request: SketchGenerationRequest):
         
         processing_time = time.time() - start_time
         
+        # Add performance metrics to response
+        performance_info = {
+            "total_time": round(metrics.total_time, 2),
+            "speedup_ratio": round(metrics.get_speedup_ratio(), 2),
+            "parallel_time": round(metrics.parallel_time, 2),
+            "cache_stats": {"hits": metrics.cache_hits, "misses": metrics.cache_misses},
+            "optimization_enabled": True
+        }
+        
         return SketchTestResponse(
             status="success" if sketch_analysis.success and enhanced_result.success else "partial",
             input_data={
                 "sketch_size": len(image_bytes),
                 "prompt": request.prompt,
-                "has_style_prefs": bool(request.style_preferences)
+                "has_style_prefs": bool(request.style_preferences),
+                "performance": performance_info  # Include performance metrics
             },
             sketch_analysis=sketch_response,
             multimodal_analysis=multimodal_response,
@@ -491,6 +486,34 @@ async def generate_from_sketch(request: SketchGenerationRequest):
             success=False,
             error=str(e)
         )
+
+
+@router.get("/performance-stats")
+async def get_performance_stats():
+    """Get real-time performance statistics for the optimized pipeline"""
+    try:
+        from ..services.performance_optimizer import get_performance_pipeline
+        from ..services.llm_client import get_llm_client
+        
+        llm_client = get_llm_client()
+        pipeline = get_performance_pipeline(llm_client)
+        
+        stats = pipeline.get_performance_stats()
+        
+        return {
+            "status": "success",
+            "performance_stats": stats,
+            "optimization_enabled": True,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get performance stats: {e}")
+        return {
+            "status": "error", 
+            "error": str(e),
+            "optimization_enabled": False
+        }
 
 
 @router.websocket("/ws/{session_id}")
