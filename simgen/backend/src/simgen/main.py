@@ -143,6 +143,10 @@ async def health_check():
 app.include_router(simulation.router, prefix="/api/v1/simulation", tags=["simulation"])
 app.include_router(templates.router, prefix="/api/v1/templates", tags=["templates"])
 
+# Include new physics pipeline router
+from .api import physics
+app.include_router(physics.router, prefix="/api/v2/physics", tags=["physics"])
+
 
 # Root endpoint
 @app.get("/")
