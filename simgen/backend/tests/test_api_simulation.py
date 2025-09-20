@@ -19,7 +19,7 @@ from simgen.api.simulation import router
 from simgen.models.schemas import SimulationRequest, SketchGenerationRequest
 from simgen.services.sketch_analyzer import SketchAnalysisResult
 from simgen.services.multimodal_enhancer import EnhancedPromptResult
-from simgen.services.simulation_generator import SimulationGenerationResult, GenerationMethod
+from simgen.services.simulation_generator import GenerationResult, SimulationGenerationError
 from simgen.models.schemas import ExtractedEntities, ObjectSchema, ConstraintSchema, EnvironmentSchema, GeometrySchema, MaterialSchema
 
 # Test fixtures
@@ -86,7 +86,7 @@ def mock_enhanced_result():
 @pytest.fixture
 def mock_generation_result():
     """Mock simulation generation result"""
-    return SimulationGenerationResult(
+    return GenerationResult(
         success=True,
         mjcf_content='<mujoco><worldbody><body name="robot_arm"><geom type="cylinder" size="0.1 0.5"/></body></worldbody></mujoco>',
         method=GenerationMethod.DYNAMIC_COMPOSITION,
@@ -241,7 +241,7 @@ class TestSimulationAPI:
         """Test handling of simulation generation timeout"""
         
         # Mock a timeout scenario
-        timeout_result = SimulationGenerationResult(
+        timeout_result = GenerationResult(
             success=False,
             mjcf_content="",
             method=GenerationMethod.DYNAMIC_COMPOSITION,

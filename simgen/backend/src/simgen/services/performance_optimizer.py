@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from .llm_client import LLMClient
 from .sketch_analyzer import SketchAnalyzer, SketchAnalysisResult  
 from .multimodal_enhancer import MultiModalEnhancer, EnhancedPromptResult
-from .simulation_generator import SimulationGenerator, SimulationGenerationResult
+from .simulation_generator import SimulationGenerator, GenerationResult
 from .realtime_progress import get_progress_tracker, ProgressStage
 
 logger = logging.getLogger(__name__)
@@ -170,7 +170,7 @@ class PerformancePipeline:
         style_preferences: Optional[Dict[str, Any]] = None,
         session_id: Optional[str] = None,
         websocket=None
-    ) -> Tuple[SketchAnalysisResult, EnhancedPromptResult, SimulationGenerationResult, PerformanceMetrics]:
+    ) -> Tuple[SketchAnalysisResult, EnhancedPromptResult, GenerationResult, PerformanceMetrics]:
         """
         Optimized generation pipeline with parallel processing and real-time progress
         
