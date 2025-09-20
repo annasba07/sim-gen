@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(mkdir:*)",
+      "Bash(cat:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose:*)",
+      "Bash(python -m pip install:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(uvicorn:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:playground.mujoco.org)",
+      "WebFetch(domain:github.com)",
+      "Bash(dir:*)",
+      "Bash(tree:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:www.google.com)",
+      "WebFetch(domain:automaticaddison.com)",
+      "Bash(npx create-next-app:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git rm:*)",
+      "Bash(git push:*)",
+      "Bash(gh project create:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue:*)",
+      "Bash(git config:*)",
+      "Bash(git log:*)",
+      "Bash(npm test:*)",
+      "Bash(npx playwright install:*)",
+      "Bash(npx playwright test:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

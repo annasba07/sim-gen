@@ -1,0 +1,96 @@
+# Production Dockerfile for SimGen AI Backend
+# Multi-stage build for optimized production image
+
+# Build stage
+FROM python:3.11-slim as builder
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    g++ \
+    cmake \
+    libgl1-mesa-dev \
+    libglu1-mesa-dev \
+    libglew-dev \
+    libglfw3-dev \
+    libxml2-dev \
+    libxslt-dev \
+    libffi-dev \
+    libjpeg-dev \
+    libpng-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /build
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Production stage
+FROM python:3.11-slim
+
+# Install runtime system dependencies
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglu1-mesa \
+    libglew2.2 \
+    libglfw3 \
+    libxml2 \
+    libxslt1.1 \
+    libjpeg62-turbo \
+    libpng16-16 \
+    zlib1g \
+    redis-tools \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash simgen && \
+    mkdir -p /app && \
+    chown -R simgen:simgen /app
+
+# Set working directory
+WORKDIR /app
+
+# Copy Python packages from builder stage
+COPY --from=builder /root/.local /home/simgen/.local
+
+# Copy application source code
+COPY --chown=simgen:simgen src/ ./src/
+COPY --chown=simgen:simgen *.py ./
+
+# Create necessary directories
+RUN mkdir -p /app/storage /app/logs /app/cache && \
+    chown -R simgen:simgen /app/storage /app/logs /app/cache
+
+# Switch to non-root user
+USER simgen
+
+# Add Python packages to PATH
+ENV PATH=/home/simgen/.local/bin:$PATH
+ENV PYTHONPATH=/app/src
+
+# Production environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV MUJOCO_GL=egl
+ENV CUDA_VISIBLE_DEVICES=0
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Default command with production settings
+CMD ["python", "-m", "uvicorn", "src.simgen.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "4", \
+     "--access-log", \
+     "--log-level", "info", \
+     "--loop", "uvloop"]

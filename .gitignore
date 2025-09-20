@@ -100,7 +100,8 @@ temp/
 *.temp
 
 # AI/ML model files (if cached locally)
-models/
+ai_models/
+ml_models/
 *.pkl
 *.joblib
 
