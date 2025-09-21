@@ -34,3 +34,12 @@ WARNING: mju_openResource: unknown file 'api_test_2_A_humanoid_robot_lea.xml'
 Sat Sep 20 11:13:11 2025
 WARNING: mju_openResource: unknown file 'api_test_3_A_bouncing_ball_with.xml'
 
+Sat Sep 20 15:34:41 2025
+WARNING: mju_openResource: unknown file 'api_test_1_A_robotic_arm_pickin.xml'
+
+Sat Sep 20 15:34:41 2025
+WARNING: mju_openResource: unknown file 'api_test_2_A_humanoid_robot_lea.xml'
+
+Sat Sep 20 15:34:41 2025
+WARNING: mju_openResource: unknown file 'api_test_3_A_bouncing_ball_with.xml'
+
