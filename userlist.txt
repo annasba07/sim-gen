@@ -1,0 +1,4 @@
+# PgBouncer userlist for authentication
+# Format: "username" "password"
+
+"simgen" "md5d4f65d9e7f8e8f8a3e7c7c2a8a8b9d5f"

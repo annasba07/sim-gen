@@ -101,8 +101,13 @@ class OptimizedBinaryEncoder:
     def __init__(self, buffer_size: int = 1024 * 128):  # 128KB default
         self.buffer = bytearray(buffer_size)
         self.buffer_size = buffer_size
-        self._temp_arrays = {}  # Reusable numpy arrays
-        self._last_frame_data = {}  # For differential encoding
+        self._temp_arrays = {}  # Reusable numpy arrays (bounded)
+        self._last_frame_data = {}  # For differential encoding (bounded)
+        self._array_access_times = {}  # Track access times for LRU
+        self._frame_access_times = {}  # Track frame access times
+        self.max_cached_arrays = 50  # Limit cached arrays
+        self.max_cached_frames = 100  # Limit cached frame data
+        self._cleanup_counter = 0  # Trigger cleanup periodically
 
     def encode_header(self, msg_type: MessageType, payload_size: int) -> memoryview:
         """
@@ -111,6 +116,85 @@ class OptimizedBinaryEncoder:
         """
         struct.pack_into('<BI', self.buffer, 0, msg_type, payload_size)
         return memoryview(self.buffer)[:5]
+
+    def cleanup_buffers(self) -> None:
+        """
+        Clean up internal buffers to prevent memory leaks.
+        Called periodically to evict old data using LRU strategy.
+        """
+        current_time = time.perf_counter()
+
+        # Clean up temp arrays if over limit
+        if len(self._temp_arrays) > self.max_cached_arrays:
+            # Find oldest arrays using LRU
+            oldest_arrays = sorted(
+                self._array_access_times.items(),
+                key=lambda x: x[1]
+            )[:len(self._temp_arrays) - self.max_cached_arrays + 10]
+
+            for array_key, _ in oldest_arrays:
+                if array_key in self._temp_arrays:
+                    del self._temp_arrays[array_key]
+                    del self._array_access_times[array_key]
+
+            logger.debug(f"Cleaned up {len(oldest_arrays)} cached arrays")
+
+        # Clean up frame data if over limit
+        if len(self._last_frame_data) > self.max_cached_frames:
+            # Find oldest frames using LRU
+            oldest_frames = sorted(
+                self._frame_access_times.items(),
+                key=lambda x: x[1]
+            )[:len(self._last_frame_data) - self.max_cached_frames + 20]
+
+            for frame_key, _ in oldest_frames:
+                if frame_key in self._last_frame_data:
+                    del self._last_frame_data[frame_key]
+                    del self._frame_access_times[frame_key]
+
+            logger.debug(f"Cleaned up {len(oldest_frames)} cached frames")
+
+        # Clean up access times for deleted entries
+        array_keys = set(self._temp_arrays.keys())
+        self._array_access_times = {
+            k: v for k, v in self._array_access_times.items()
+            if k in array_keys
+        }
+
+        frame_keys = set(self._last_frame_data.keys())
+        self._frame_access_times = {
+            k: v for k, v in self._frame_access_times.items()
+            if k in frame_keys
+        }
+
+    def _get_or_create_array(self, key: str, shape: tuple, dtype=np.float32) -> np.ndarray:
+        """
+        Get cached array or create new one with LRU tracking.
+        """
+        current_time = time.perf_counter()
+
+        if key in self._temp_arrays:
+            self._array_access_times[key] = current_time
+            return self._temp_arrays[key]
+
+        # Create new array
+        array = np.empty(shape, dtype=dtype)
+        self._temp_arrays[key] = array
+        self._array_access_times[key] = current_time
+
+        # Trigger cleanup if needed
+        self._cleanup_counter += 1
+        if self._cleanup_counter % 50 == 0:  # Cleanup every 50 array creations
+            self.cleanup_buffers()
+
+        return array
+
+    def _update_frame_access(self, frame_id: str) -> None:
+        """
+        Update frame access time for LRU tracking.
+        """
+        current_time = time.perf_counter()
+        self._frame_access_times[frame_id] = current_time
 
     def encode_frame_optimized(self, frame_data: Dict[str, Any]) -> bytes:
         """
@@ -188,8 +272,9 @@ class OptimizedBinaryEncoder:
         frame_id = frame_data['frame_id']
 
         # First frame must be full
-        if not self._last_frame_data:
-            self._last_frame_data = frame_data.copy()
+        if frame_id not in self._last_frame_data:
+            self._last_frame_data[frame_id] = frame_data.copy()
+            self._update_frame_access(frame_id)
             return self.encode_frame_optimized(frame_data)
 
         # Calculate differences
@@ -197,7 +282,7 @@ class OptimizedBinaryEncoder:
         threshold = 0.001  # Minimum change threshold
 
         # Check joint positions
-        last_qpos = np.array(self._last_frame_data.get('qpos', []), dtype=np.float32)
+        last_qpos = np.array(self._last_frame_data[frame_id].get('qpos', []), dtype=np.float32)
         curr_qpos = np.array(frame_data.get('qpos', []), dtype=np.float32)
 
         if len(last_qpos) == len(curr_qpos):
@@ -220,7 +305,14 @@ class OptimizedBinaryEncoder:
         # Encode changes...
         # (Implementation would continue here)
 
-        self._last_frame_data = frame_data.copy()
+        self._last_frame_data[frame_id] = frame_data.copy()
+        self._update_frame_access(frame_id)
+
+        # Trigger periodic cleanup
+        self._cleanup_counter += 1
+        if self._cleanup_counter % 100 == 0:  # Cleanup every 100 frames
+            self.cleanup_buffers()
+
         return bytes(self.buffer[:offset])
 
     def encode_manifest_optimized(self, manifest: Dict[str, Any]) -> bytes:
@@ -320,9 +412,14 @@ class OptimizedStreamingManager:
         return OptimizedBinaryEncoder()
 
     def return_encoder(self, encoder: OptimizedBinaryEncoder):
-        """Return encoder to pool."""
+        """Return encoder to pool with proper cleanup."""
         if len(self.encoder_pool) < 20:  # Keep max 20 in pool
-            encoder._last_frame_data.clear()  # Reset state
+            # Clean up encoder state to prevent memory leaks
+            encoder._last_frame_data.clear()
+            encoder._temp_arrays.clear()
+            encoder._array_access_times.clear()
+            encoder._frame_access_times.clear()
+            encoder._cleanup_counter = 0
             self.encoder_pool.append(encoder)
 
     async def add_session(self, session_id: str, websocket: WebSocket) -> StreamingSession:

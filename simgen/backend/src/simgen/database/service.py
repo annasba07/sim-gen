@@ -401,20 +401,26 @@ class DatabaseService:
         session: Optional[AsyncSession] = None
     ) -> Dict[str, Any]:
         """Get simulation statistics with optimized aggregation."""
-        
+
+        # Input validation to prevent SQL injection
+        if not isinstance(days, int) or days < 1 or days > 365:
+            raise ValueError("Days must be an integer between 1 and 365")
+
         cache_tags = ["analytics", "statistics"]
         if session_id:
             cache_tags.append(f"session_{session_id}")
-        
+
         hints = QueryHint(
             use_cache=CacheStrategy.MEDIUM_TERM,
             cache_tags=cache_tags
         )
-        
+
         try:
-            # Base conditions
+            # Base conditions using parameterized query for safety
+            from sqlalchemy import text
+            interval_expr = text("INTERVAL :days DAY").bindparam(days=days)
             conditions = [
-                Simulation.created_at >= func.now() - func.interval(f'{days} days')
+                Simulation.created_at >= func.now() - interval_expr
             ]
             
             if session_id:

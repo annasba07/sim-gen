@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 # Configuration
-from .core.config import settings
+from .core.config_clean import settings
 
 # Dependency injection
 from .core.container import container

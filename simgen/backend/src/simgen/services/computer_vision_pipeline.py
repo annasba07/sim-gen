@@ -123,17 +123,23 @@ class ComputerVisionPipeline:
     """Advanced computer vision pipeline for sketch analysis"""
 
     def __init__(self):
-        self.ocr_reader = None
-        self._initialize_ocr()
+        self._ocr_reader = None  # Lazy initialization
 
-    def _initialize_ocr(self):
-        """Initialize OCR reader"""
-        try:
-            # Initialize EasyOCR with English
-            self.ocr_reader = easyocr.Reader(['en'], gpu=False)
-            logger.info("OCR reader initialized successfully")
-        except Exception as e:
-            logger.warning(f"OCR initialization failed: {e}. Text detection will be disabled.")
+    async def _get_ocr_reader(self):
+        """Lazy async OCR initialization to prevent startup blocking."""
+        if not hasattr(self, '_ocr_reader') or self._ocr_reader is None:
+            try:
+                import asyncio
+                # Initialize OCR in thread pool to avoid blocking
+                loop = asyncio.get_event_loop()
+                self._ocr_reader = await loop.run_in_executor(
+                    None, lambda: easyocr.Reader(['en'], gpu=False)
+                )
+                logger.info("OCR reader initialized asynchronously")
+            except Exception as e:
+                logger.warning(f"OCR initialization failed: {e}. Text detection will be disabled.")
+                self._ocr_reader = None
+        return self._ocr_reader
 
     async def analyze_sketch(self, image_data: Union[bytes, np.ndarray]) -> CVAnalysisResult:
         """
@@ -159,7 +165,7 @@ class ComputerVisionPipeline:
             connections = self._detect_connections(shapes, strokes)
 
             # Step 5: Extract text annotations
-            text_annotations = self._extract_text(processed_image)
+            text_annotations = await self._extract_text(processed_image)
 
             # Step 6: Associate text with shapes
             self._associate_text_with_shapes(text_annotations, shapes)
@@ -686,15 +692,21 @@ class ComputerVisionPipeline:
     def _detect_connections(self, shapes: List[DetectedShape], strokes: List[Stroke]) -> List[DetectedConnection]:
         """
         Detect connections between shapes (joints, constraints)
+        Optimized with spatial indexing to avoid O(n²) complexity.
         """
         connections = []
 
-        # Look for shapes that are close to each other
-        for i, shape1 in enumerate(shapes):
-            for j, shape2 in enumerate(shapes[i+1:], i+1):
-                connection = self._analyze_shape_connection(shape1, shape2, strokes)
-                if connection:
-                    connections.append(connection)
+        # Use spatial indexing to reduce O(n²) to approximately O(n log n)
+        spatial_index = self._build_spatial_index(shapes)
+
+        # Look for shapes that are close to each other using spatial index
+        for shape1 in shapes:
+            nearby_shapes = self._get_nearby_shapes(shape1, spatial_index, shapes)
+            for shape2 in nearby_shapes:
+                if shape1 != shape2:  # Don't connect shape to itself
+                    connection = self._analyze_shape_connection(shape1, shape2, strokes)
+                    if connection:
+                        connections.append(connection)
 
         # Look for explicit connection drawings (lines between shapes, springs, etc.)
         line_shapes = [s for s in shapes if s.shape_type == ShapeType.LINE]
@@ -704,6 +716,62 @@ class ComputerVisionPipeline:
                 connections.append(connection)
 
         return connections
+
+    def _build_spatial_index(self, shapes: List[DetectedShape], grid_size: int = 50) -> Dict[Tuple[int, int], List[int]]:
+        """
+        Build a simple grid-based spatial index for efficient proximity queries.
+        Maps grid cells to lists of shape indices.
+        """
+        spatial_index = {}
+
+        for i, shape in enumerate(shapes):
+            # Calculate grid cell coordinates
+            grid_x = int(shape.center.x // grid_size)
+            grid_y = int(shape.center.y // grid_size)
+
+            # Add shape to multiple cells based on its bounding box
+            bbox = shape.bounding_box
+            min_grid_x = int(bbox[0] // grid_size)
+            max_grid_x = int(bbox[2] // grid_size)
+            min_grid_y = int(bbox[1] // grid_size)
+            max_grid_y = int(bbox[3] // grid_size)
+
+            for gx in range(min_grid_x, max_grid_x + 1):
+                for gy in range(min_grid_y, max_grid_y + 1):
+                    cell = (gx, gy)
+                    if cell not in spatial_index:
+                        spatial_index[cell] = []
+                    spatial_index[cell].append(i)
+
+        return spatial_index
+
+    def _get_nearby_shapes(
+        self,
+        shape: DetectedShape,
+        spatial_index: Dict[Tuple[int, int], List[int]],
+        all_shapes: List[DetectedShape],
+        grid_size: int = 50,
+        search_radius: int = 2
+    ) -> List[DetectedShape]:
+        """
+        Get shapes that are potentially close to the given shape using spatial index.
+        Only checks nearby grid cells instead of all shapes.
+        """
+        nearby_shapes = []
+        shape_center_grid_x = int(shape.center.x // grid_size)
+        shape_center_grid_y = int(shape.center.y // grid_size)
+
+        # Check surrounding grid cells within search radius
+        for dx in range(-search_radius, search_radius + 1):
+            for dy in range(-search_radius, search_radius + 1):
+                cell = (shape_center_grid_x + dx, shape_center_grid_y + dy)
+                if cell in spatial_index:
+                    for shape_idx in spatial_index[cell]:
+                        candidate = all_shapes[shape_idx]
+                        if candidate not in nearby_shapes:
+                            nearby_shapes.append(candidate)
+
+        return nearby_shapes
 
     def _analyze_shape_connection(self, shape1: DetectedShape, shape2: DetectedShape, strokes: List[Stroke]) -> Optional[DetectedConnection]:
         """
@@ -849,18 +917,23 @@ class ComputerVisionPipeline:
 
         return nearest_shape
 
-    def _extract_text(self, image: np.ndarray) -> List[DetectedText]:
+    async def _extract_text(self, image: np.ndarray) -> List[DetectedText]:
         """
         Extract text annotations from the image using OCR
         """
         text_annotations = []
 
-        if not self.ocr_reader:
+        ocr_reader = await self._get_ocr_reader()
+        if not ocr_reader:
             return text_annotations
 
         try:
-            # Use EasyOCR to detect text
-            results = self.ocr_reader.readtext(image)
+            # Use EasyOCR to detect text (run in thread pool for better performance)
+            import asyncio
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(
+                None, lambda: ocr_reader.readtext(image)
+            )
 
             for (bbox, text, confidence) in results:
                 if confidence > 0.3:  # Confidence threshold
