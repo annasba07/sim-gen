@@ -21,7 +21,8 @@ from .core.interfaces import (
     ISketchAnalyzer,
     ICacheService,
     IWebSocketManager,
-    ILLMClient
+    ILLMClient,
+    IComputerVisionPipeline
 )
 
 # Service implementations
@@ -32,9 +33,10 @@ from .services.vision.analyzer import OptimizedSketchAnalyzer
 from .services.ai.llm_client import LLMClient
 from .services.infrastructure.cache import CacheService
 from .services.infrastructure.websocket import RedisWebSocketManager
+from .services.cv_simplified import SimplifiedCVPipeline
 
 # API routes
-from .api import health, physics_clean, sketch_clean
+from .api import health, physics_clean, sketch_clean, realtime_feedback, sketch_templates, error_feedback
 
 # Middleware
 from .core.validation import validate_request_middleware, rate_limiter
@@ -66,6 +68,10 @@ async def lifespan(app: FastAPI):
 
         # Start background tasks
         await start_background_tasks()
+
+        # Initialize CV pipeline models asynchronously
+        cv_pipeline = container.get(IComputerVisionPipeline)
+        await cv_pipeline.initialize()
 
         logger.info("Application started successfully")
         yield
@@ -122,6 +128,10 @@ async def register_dependencies():
     # LLM client
     llm_client = LLMClient()
     container.register(ILLMClient, llm_client)
+
+    # Simplified CV pipeline (replaces 1,118-line custom implementation)
+    cv_pipeline = SimplifiedCVPipeline()
+    container.register(IComputerVisionPipeline, cv_pipeline)
 
     # Sketch analyzer with dependencies
     sketch_analyzer = OptimizedSketchAnalyzer(
@@ -211,6 +221,9 @@ def create_application() -> FastAPI:
     app.include_router(health.router)
     app.include_router(physics_clean.router)
     app.include_router(sketch_clean.router)
+    app.include_router(realtime_feedback.router)
+    app.include_router(sketch_templates.router)
+    app.include_router(error_feedback.router)
 
     # Exception handlers
     @app.exception_handler(ValidationError)

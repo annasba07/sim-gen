@@ -1,0 +1,18 @@
+# Simplified CV Pipeline Dependencies
+# Replaces custom implementations with proven libraries
+
+# Core CV libraries
+ultralytics>=8.0.0       # YOLOv8 for object detection (replaces custom shape detection)
+opencv-python>=4.8.0     # OpenCV for image processing (replaces custom preprocessing)
+easyocr>=1.7.0          # OCR (keep existing but simplified usage)
+
+# Optional NLP for text understanding
+spacy>=3.6.0            # Text analysis (replaces custom text interpretation)
+en-core-web-sm          # spaCy English model
+
+# Image processing
+Pillow>=10.0.0          # Image handling
+numpy>=1.24.0           # Array operations
+
+# Async support
+asyncio-pool>=0.6.0     # Thread pool management for async operations

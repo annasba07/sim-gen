@@ -66,16 +66,16 @@ class ISketchAnalyzer(Protocol):
 class IComputerVisionPipeline(Protocol):
     """Interface for computer vision processing."""
 
-    async def process_image(self, image_data: bytes) -> CVResult:
-        """Process image through CV pipeline."""
+    async def analyze_sketch(self, image_data: bytes) -> Any:
+        """Analyze sketch and return simplified CV result."""
         ...
 
-    async def extract_shapes(self, image_data: bytes) -> List[Dict]:
-        """Extract shapes from image."""
+    async def initialize(self) -> None:
+        """Initialize heavy models asynchronously."""
         ...
 
-    async def extract_text(self, image_data: bytes) -> List[str]:
-        """Extract text from image using OCR."""
+    def get_confidence(self) -> float:
+        """Get confidence score of last analysis."""
         ...
 
 
