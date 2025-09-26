@@ -1,0 +1,35 @@
+# Computer Vision Pipeline Dependencies
+# Additional requirements for sketch analysis functionality
+
+# Core computer vision
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+Pillow>=10.0.0
+numpy>=1.24.0
+scipy>=1.11.0
+scikit-learn>=1.3.0
+
+# OCR capabilities
+easyocr>=1.7.0
+pytesseract>=0.3.10  # Alternative OCR
+
+# Image processing enhancements
+scikit-image>=0.21.0
+mahotas>=1.4.13
+
+# Machine learning for shape classification
+scikit-learn>=1.3.0
+joblib>=1.3.0
+
+# Performance optimizations
+numba>=0.57.0
+
+# For handling different image formats
+imageio>=2.31.0
+
+# Mathematical operations
+sympy>=1.12  # For geometric calculations
+
+# Optional: Advanced shape detection
+# shapely>=2.0.0  # Geometric operations
+# matplotlib>=3.7.0  # For visualization in development

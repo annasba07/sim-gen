@@ -373,29 +373,30 @@ async def submit_feedback(
 
 @router.post("/sketch-generate", response_model=SketchTestResponse)
 async def generate_from_sketch(request: SketchGenerationRequest):
-    """Generate physics simulation from sketch + optional text prompt with optimized parallel processing."""
-    
+    """Generate physics simulation from sketch using advanced computer vision pipeline."""
+
     import base64
     import time
-    
+
     start_time = time.time()
-    
+
     try:
-        # Import optimized services
-        from ..services.performance_optimizer import get_performance_pipeline
+        # Import advanced CV pipeline services
+        from ..services.sketch_analyzer import get_sketch_analyzer
+        from ..services.mjcf_compiler import MJCFCompiler
         from ..services.llm_client import get_llm_client
-        
-        # Initialize high-performance pipeline
-        llm_client = get_llm_client()
-        performance_pipeline = get_performance_pipeline(llm_client)
-        
+
+        # Initialize advanced sketch analyzer with CV pipeline
+        sketch_analyzer = get_sketch_analyzer()
+        mjcf_compiler = MJCFCompiler()
+
         # Decode the sketch image
         try:
             # Remove data URL prefix if present
             sketch_data = request.sketch_data
             if sketch_data.startswith('data:image'):
                 sketch_data = sketch_data.split(',')[1]
-            
+
             image_bytes = base64.b64decode(sketch_data)
         except Exception as e:
             return SketchTestResponse(
@@ -405,20 +406,50 @@ async def generate_from_sketch(request: SketchGenerationRequest):
                 success=False,
                 error=f"Invalid sketch data: {str(e)}"
             )
-        
-        # 🚀 HIGH-PERFORMANCE PARALLEL PIPELINE
-        # Runs sketch analysis + text preprocessing in parallel
-        # Includes intelligent caching and performance tracking
-        sketch_analysis, enhanced_result, generation_result, metrics = await performance_pipeline.generate_optimized(
+
+        # 🚀 ADVANCED COMPUTER VISION PIPELINE
+        # Uses CV + AI hybrid approach for superior sketch understanding
+        sketch_analysis = await sketch_analyzer.analyze_sketch(
             image_data=image_bytes,
             user_text=request.prompt,
-            style_preferences=request.style_preferences,
-            session_id=str(uuid.uuid4())  # Generate session ID for tracking
+            include_actuators=True,
+            include_sensors=True
         )
-        
-        # Prepare response data structures
+        # Generate MJCF from PhysicsSpec if available
+        mjcf_content = None
+        generation_data = None
+
+        if sketch_analysis.success and sketch_analysis.physics_spec:
+            try:
+                # Compile PhysicsSpec to MJCF XML
+                mjcf_content = mjcf_compiler.compile(sketch_analysis.physics_spec)
+
+                generation_data = {
+                    "success": True,
+                    "method": "cv_pipeline",
+                    "mjcf_preview": mjcf_content[:500] + "..." if len(mjcf_content) > 500 else mjcf_content,
+                    "full_mjcf_length": len(mjcf_content),
+                    "error": None,
+                    "cv_detected_shapes": len(sketch_analysis.cv_analysis.shapes) if sketch_analysis.cv_analysis else 0,
+                    "cv_detected_connections": len(sketch_analysis.cv_analysis.connections) if sketch_analysis.cv_analysis else 0,
+                    "physics_spec_bodies": len(sketch_analysis.physics_spec.bodies),
+                    "physics_spec_actuators": len(sketch_analysis.physics_spec.actuators),
+                    "physics_spec_sensors": len(sketch_analysis.physics_spec.sensors)
+                }
+
+            except Exception as e:
+                logger.error(f"MJCF compilation failed: {e}")
+                generation_data = {
+                    "success": False,
+                    "method": "cv_pipeline",
+                    "mjcf_preview": "",
+                    "full_mjcf_length": 0,
+                    "error": f"MJCF compilation failed: {str(e)}"
+                }
+
+        # Prepare sketch analysis response
         sketch_response = None
-        if sketch_analysis.success:
+        if sketch_analysis:
             sketch_response = SketchAnalysisResponse(
                 success=sketch_analysis.success,
                 confidence_score=sketch_analysis.confidence_score,
@@ -428,53 +459,54 @@ async def generate_from_sketch(request: SketchGenerationRequest):
                 raw_vision_output=sketch_analysis.raw_vision_output,
                 error_message=sketch_analysis.error_message
             )
-        
+
+        # Prepare multimodal response (enhanced for CV pipeline)
         multimodal_response = None
-        if enhanced_result.success:
+        if sketch_analysis.success:
+            # Calculate contributions based on CV analysis
+            sketch_contribution = 0.8 if sketch_analysis.cv_analysis and sketch_analysis.cv_analysis.shapes else 0.3
+            text_contribution = 0.7 if request.prompt else 0.1
+
+            # Normalize contributions
+            total_contrib = sketch_contribution + text_contribution
+            if total_contrib > 0:
+                sketch_contribution /= total_contrib
+                text_contribution /= total_contrib
+
             multimodal_response = MultiModalResponse(
                 sketch_analysis=sketch_response,
-                enhanced_prompt=enhanced_result.enhanced_prompt,
-                sketch_contribution=enhanced_result.sketch_contribution,
-                text_contribution=enhanced_result.text_contribution,
-                confidence_score=enhanced_result.confidence_score
+                enhanced_prompt=sketch_analysis.physics_description,
+                sketch_contribution=sketch_contribution,
+                text_contribution=text_contribution,
+                confidence_score=sketch_analysis.confidence_score
             )
-        
-        # Prepare generation result data
-        generation_data = None
-        if generation_result:
-            generation_data = {
-                "success": generation_result.success,
-                "method": generation_result.method.value if generation_result.method else "unknown",
-                "mjcf_preview": generation_result.mjcf_content[:500] + "..." if len(generation_result.mjcf_content) > 500 else generation_result.mjcf_content,
-                "full_mjcf_length": len(generation_result.mjcf_content),
-                "error": generation_result.error_message
-            }
-        
+
         processing_time = time.time() - start_time
-        
-        # Add performance metrics to response
+
+        # Add CV pipeline performance info
         performance_info = {
-            "total_time": round(metrics.total_time, 2),
-            "speedup_ratio": round(metrics.get_speedup_ratio(), 2),
-            "parallel_time": round(metrics.parallel_time, 2),
-            "cache_stats": {"hits": metrics.cache_hits, "misses": metrics.cache_misses},
-            "optimization_enabled": True
+            "total_time": round(processing_time, 2),
+            "cv_pipeline_enabled": True,
+            "processing_notes": sketch_analysis.processing_notes if sketch_analysis.processing_notes else []
         }
-        
+
+        # Determine success status
+        overall_success = sketch_analysis.success and (generation_data is None or generation_data.get("success", False))
+
         return SketchTestResponse(
-            status="success" if sketch_analysis.success and enhanced_result.success else "partial",
+            status="success" if overall_success else "partial" if sketch_analysis.success else "error",
             input_data={
                 "sketch_size": len(image_bytes),
                 "prompt": request.prompt,
                 "has_style_prefs": bool(request.style_preferences),
-                "performance": performance_info  # Include performance metrics
+                "performance": performance_info
             },
             sketch_analysis=sketch_response,
             multimodal_analysis=multimodal_response,
             generation_result=generation_data,
             processing_time=processing_time,
-            success=generation_result.success if generation_result else False,
-            error=None
+            success=overall_success,
+            error=sketch_analysis.error_message if not sketch_analysis.success else None
         )
         
     except Exception as e:

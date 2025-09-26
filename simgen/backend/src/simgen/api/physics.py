@@ -127,24 +127,73 @@ PhysicsSpec must include:
 - actuators: motors/forces to control the system
 - sensors: measurements from the system"""
 
-        # Add sketch analysis if provided
+        # Enhanced sketch analysis with computer vision pipeline
+        physics_spec = None
         user_content = request.prompt
+
         if request.sketch_data and request.use_multimodal:
-            user_content = f"""Sketch provided (analyze the shapes and structure).
+            # Use advanced CV pipeline for sketch analysis
+            try:
+                from ..services.sketch_analyzer import get_sketch_analyzer
+                import base64
+
+                sketch_analyzer = get_sketch_analyzer()
+
+                # Decode sketch data
+                sketch_data = request.sketch_data
+                if sketch_data.startswith('data:image'):
+                    sketch_data = sketch_data.split(',')[1]
+                image_bytes = base64.b64decode(sketch_data)
+
+                # Analyze sketch with CV pipeline
+                sketch_result = await sketch_analyzer.analyze_sketch(
+                    image_data=image_bytes,
+                    user_text=request.prompt,
+                    include_actuators=request.include_actuators,
+                    include_sensors=request.include_sensors
+                )
+
+                if sketch_result.success and sketch_result.physics_spec:
+                    # Use PhysicsSpec from CV pipeline directly
+                    physics_spec = sketch_result.physics_spec
+                    logger.info(f"Successfully generated PhysicsSpec from sketch with {len(physics_spec.bodies)} bodies")
+                else:
+                    # Fall back to enhanced prompt for LLM
+                    user_content = f"""Sketch analysis result:
+{sketch_result.physics_description}
+
+Computer vision detected:
+- {len(sketch_result.cv_analysis.shapes) if sketch_result.cv_analysis else 0} shapes
+- {len(sketch_result.cv_analysis.connections) if sketch_result.cv_analysis else 0} connections
+- {len(sketch_result.cv_analysis.text_annotations) if sketch_result.cv_analysis else 0} text annotations
+
+Text description: {request.prompt}
+
+Generate a PhysicsSpec that captures this physics system based on the sketch analysis and description."""
+
+            except Exception as e:
+                logger.warning(f"CV sketch analysis failed, falling back to LLM-only: {e}")
+                # Fall back to basic multimodal prompt
+                user_content = f"""Sketch provided (analyze the shapes and structure).
 Text description: {request.prompt}
 
 Based on the sketch and description, generate a PhysicsSpec that captures the intended physics system."""
 
-        # Generate with structured output
-        response = await llm_client.generate_structured(
-            system_prompt=system_prompt,
-            user_prompt=user_content,
-            response_schema=PhysicsSpec.schema(),
-            max_tokens=4000
-        )
+        # Generate PhysicsSpec (either from CV pipeline or LLM)
+        if physics_spec is None:
+            # Generate with LLM structured output
+            response = await llm_client.generate_structured(
+                system_prompt=system_prompt,
+                user_prompt=user_content,
+                response_schema=PhysicsSpec.schema(),
+                max_tokens=4000
+            )
 
-        # Parse and validate
-        spec = PhysicsSpec.parse_raw(response)
+            # Parse and validate
+            spec = PhysicsSpec.parse_raw(response)
+        else:
+            # Use PhysicsSpec from CV pipeline
+            spec = physics_spec
 
         # Compile to MJCF
         mjcf_xml = compiler.compile(spec)

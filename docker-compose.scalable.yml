@@ -1,0 +1,170 @@
+version: '3.8'
+
+# Pragmatic scalable architecture without over-engineering
+# Uses Docker Compose for service separation and nginx for load balancing
+
+services:
+  # Load balancer / API Gateway (simple nginx, not Kubernetes)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx-scalable.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api1
+      - api2
+      - cv_service
+    networks:
+      - simgen_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # API instances (can scale horizontally)
+  api1:
+    build:
+      context: ./simgen/backend
+      dockerfile: Dockerfile
+    environment:
+      - SERVER_ID=api-1
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://simgen:simgen@postgres:5432/simgen
+      - CV_SERVICE_URL=http://cv_service:8001
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - simgen_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api2:
+    build:
+      context: ./simgen/backend
+      dockerfile: Dockerfile
+    environment:
+      - SERVER_ID=api-2
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://simgen:simgen@postgres:5432/simgen
+      - CV_SERVICE_URL=http://cv_service:8001
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - simgen_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Computer Vision service (separate for resource isolation)
+  cv_service:
+    build:
+      context: ./simgen/backend
+      dockerfile: Dockerfile.cv
+    environment:
+      - SERVICE_TYPE=cv
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://simgen:simgen@postgres:5432/simgen
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - simgen_network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for session management and caching
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - simgen_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL with read replica setup (simple master-slave)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=simgen
+      - POSTGRES_USER=simgen
+      - POSTGRES_PASSWORD=simgen
+      - POSTGRES_MAX_CONNECTIONS=200
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - simgen_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simgen"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Simple monitoring with Prometheus (not full observability stack)
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus-simple.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    networks:
+      - simgen_network
+
+  # Frontend (can be served by CDN in production)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - NEXT_PUBLIC_API_URL=http://nginx
+    ports:
+      - "3000:3000"
+    networks:
+      - simgen_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  redis_data:
+  postgres_data:
+  prometheus_data:
+
+networks:
+  simgen_network:
+    driver: bridge
