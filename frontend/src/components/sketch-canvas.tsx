@@ -2,8 +2,9 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { Button } from './ui/button'
-import { Trash2, Download, Upload } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { Trash2, Download, Upload, Info, CheckCircle } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useRealtimeFeedback } from '@/hooks/use-realtime-feedback'
 
 interface SketchCanvasProps {
   width?: number
@@ -17,9 +18,9 @@ interface Point {
   y: number
 }
 
-export function SketchCanvas({ 
-  width = 600, 
-  height = 400, 
+export function SketchCanvas({
+  width = 600,
+  height = 400,
   onSketchChange,
   className = ""
 }: SketchCanvasProps) {
@@ -27,6 +28,9 @@ export function SketchCanvas({
   const [isDrawing, setIsDrawing] = useState(false)
   const [lastPoint, setLastPoint] = useState<Point | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Real-time feedback integration
+  const { isConnected, feedback, sendSketchData } = useRealtimeFeedback()
 
   // Initialize canvas
   useEffect(() => {
@@ -104,15 +108,20 @@ export function SketchCanvas({
     if (isDrawing) {
       setIsDrawing(false)
       setLastPoint(null)
-      
+
       // Notify parent of canvas change
       const canvas = canvasRef.current
       if (canvas && onSketchChange) {
         const dataURL = canvas.toDataURL('image/png')
         onSketchChange(dataURL)
+
+        // Send to real-time feedback if connected
+        if (isConnected) {
+          sendSketchData(dataURL)
+        }
       }
     }
-  }, [isDrawing, onSketchChange])
+  }, [isDrawing, onSketchChange, isConnected, sendSketchData])
 
   // Clear canvas
   const clearCanvas = useCallback(() => {
@@ -232,10 +241,74 @@ export function SketchCanvas({
         className="hidden"
       />
       
-      {/* Drawing hint */}
-      <div className="absolute bottom-4 left-4 text-sm text-gray-500 bg-white/90 px-3 py-1 rounded-lg backdrop-blur-sm">
-        Draw your physics idea here
-      </div>
+      {/* Drawing hint / Real-time feedback */}
+      <AnimatePresence mode="wait">
+        {feedback ? (
+          <motion.div
+            key="feedback"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className={`absolute bottom-4 left-4 right-4 p-3 rounded-lg backdrop-blur-sm ${
+              feedback.type === 'error'
+                ? 'bg-red-100/90 border border-red-300'
+                : feedback.confidence && feedback.confidence > 0.7
+                ? 'bg-green-100/90 border border-green-300'
+                : 'bg-blue-100/90 border border-blue-300'
+            }`}
+          >
+            <div className="flex items-start gap-2">
+              {feedback.type === 'error' ? (
+                <Info className="w-4 h-4 text-red-600 mt-0.5" />
+              ) : feedback.confidence && feedback.confidence > 0.7 ? (
+                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+              ) : (
+                <Info className="w-4 h-4 text-blue-600 mt-0.5" />
+              )}
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-800">
+                  {feedback.message}
+                </p>
+                {feedback.suggestions && feedback.suggestions.length > 0 && (
+                  <ul className="mt-1 text-xs text-gray-600">
+                    {feedback.suggestions.map((suggestion, idx) => (
+                      <li key={idx}>• {suggestion}</li>
+                    ))}
+                  </ul>
+                )}
+                {feedback.physics_hints && feedback.physics_hints.length > 0 && (
+                  <p className="mt-1 text-xs text-gray-600 italic">
+                    {feedback.physics_hints[0]}
+                  </p>
+                )}
+              </div>
+              {feedback.confidence && (
+                <div className="text-xs text-gray-500">
+                  {Math.round(feedback.confidence * 100)}%
+                </div>
+              )}
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="hint"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute bottom-4 left-4 text-sm text-gray-500 bg-white/90 px-3 py-1 rounded-lg backdrop-blur-sm"
+          >
+            <div className="flex items-center gap-2">
+              {isConnected && (
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              )}
+              <span>Draw your physics idea here</span>
+              {isConnected && (
+                <span className="text-xs text-gray-400">(Live feedback enabled)</span>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

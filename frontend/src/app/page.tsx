@@ -1,20 +1,22 @@
 "use client"
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SketchCanvas } from '@/components/sketch-canvas'
 import { SimulationViewer } from '@/components/simulation-viewer'
 import { Button } from '@/components/ui/button'
-import { 
-  Sparkles, 
-  Rocket, 
-  Wand2, 
-  Brain, 
+import { getPhysicsAPI } from '@/lib/physics-api'
+import {
+  Sparkles,
+  Rocket,
+  Wand2,
+  Brain,
   Zap,
   ArrowRight,
   Palette,
   Cpu,
-  Lightbulb
+  Lightbulb,
+  AlertCircle
 } from 'lucide-react'
 
 interface ProcessingStep {
@@ -31,6 +33,9 @@ export default function Home() {
   const [textPrompt, setTextPrompt] = useState<string>("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [mjcfResult, setMjcfResult] = useState<string>("")
+  const [error, setError] = useState<string | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const physicsApi = getPhysicsAPI()
   const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([
     {
       id: 'analyze',
@@ -70,43 +75,101 @@ export default function Home() {
     setSketchData(dataURL)
   }, [])
 
-  const simulateProcessing = async () => {
+  const processWithRealAPI = async () => {
     setIsProcessing(true)
-    
+    setError(null)
+
     const steps = [...processingSteps]
-    
-    for (let i = 0; i < steps.length; i++) {
-      // Activate current step
-      steps[i].isActive = true
+
+    try {
+      // Step 1: Analyzing Sketch
+      steps[0].isActive = true
       setProcessingSteps([...steps])
-      
-      // Animate progress
-      for (let progress = 0; progress <= 100; progress += 10) {
-        steps[i].progress = progress
+      for (let progress = 0; progress <= 40; progress += 10) {
+        steps[0].progress = progress
         setProcessingSteps([...steps])
-        await new Promise(resolve => setTimeout(resolve, 100))
+        await new Promise(resolve => setTimeout(resolve, 50))
       }
-      
-      // Complete current step
-      steps[i].isActive = false
-      steps[i].isComplete = true
+
+      // Step 2: Enhancing Prompt
+      steps[0].progress = 100
+      steps[0].isActive = false
+      steps[0].isComplete = true
+      steps[1].isActive = true
       setProcessingSteps([...steps])
-      
-      await new Promise(resolve => setTimeout(resolve, 300))
+
+      for (let progress = 0; progress <= 40; progress += 10) {
+        steps[1].progress = progress
+        setProcessingSteps([...steps])
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
+
+      // Step 3: Generate Physics - Real API Call
+      steps[1].progress = 100
+      steps[1].isActive = false
+      steps[1].isComplete = true
+      steps[2].isActive = true
+      setProcessingSteps([...steps])
+
+      // Make the actual API call
+      const generateResponse = await physicsApi.generateFromPrompt({
+        prompt: textPrompt || "Create an interesting physics simulation based on this sketch",
+        sketch_data: sketchData ? sketchData.split(',')[1] : undefined, // Remove data:image/png;base64, prefix
+        use_multimodal: true,
+        max_bodies: 10,
+        include_actuators: true,
+        include_sensors: true
+      })
+
+      steps[2].progress = 100
+      steps[2].isActive = false
+      steps[2].isComplete = true
+
+      if (generateResponse.success && generateResponse.mjcf_xml) {
+        // Step 4: Rendering Simulation
+        steps[3].isActive = true
+        setProcessingSteps([...steps])
+
+        for (let progress = 0; progress <= 100; progress += 20) {
+          steps[3].progress = progress
+          setProcessingSteps([...steps])
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+
+        steps[3].isActive = false
+        steps[3].isComplete = true
+        setProcessingSteps([...steps])
+
+        // Set the real MJCF result
+        setMjcfResult(generateResponse.mjcf_xml)
+      } else {
+        throw new Error(generateResponse.error || 'Failed to generate physics simulation')
+      }
+    } catch (err) {
+      // Handle errors gracefully
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred'
+      setError(errorMessage)
+      console.error('API Error:', err)
+
+      // Reset all steps on error
+      steps.forEach(step => {
+        step.isActive = false
+        step.isComplete = false
+        step.progress = 0
+      })
+      setProcessingSteps(steps)
+    } finally {
+      setIsProcessing(false)
     }
-    
-    // Set demo MJCF result
-    setMjcfResult("<mujoco><!-- Demo physics simulation --></mujoco>")
-    setIsProcessing(false)
   }
 
   const handleGenerate = async () => {
     if (!sketchData && !textPrompt) {
-      alert('Please draw something or enter a text description!')
+      setError('Please draw something or enter a text description!')
       return
     }
-    
-    await simulateProcessing()
+
+    await processWithRealAPI()
   }
 
   return (
@@ -194,6 +257,32 @@ export default function Home() {
                 className="w-full h-24 p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-700 placeholder-gray-400"
               />
             </div>
+
+            {/* Error Display */}
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-red-800 font-medium">Error</p>
+                      <p className="text-red-700 text-sm mt-1">{error}</p>
+                    </div>
+                    <button
+                      onClick={() => setError(null)}
+                      className="ml-auto text-red-600 hover:text-red-700"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Generate Button */}
             <motion.div
