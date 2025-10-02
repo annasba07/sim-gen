@@ -7,7 +7,9 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(find:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "WebSearch",
+      "Bash(git config:*)"
     ],
     "deny": [],
     "ask": []
