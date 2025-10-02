@@ -9,7 +9,9 @@
       "Bash(find:*)",
       "Bash(awk:*)",
       "WebSearch",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(python:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
