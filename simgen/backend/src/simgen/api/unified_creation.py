@@ -58,13 +58,22 @@ async def get_mode_details(mode_id: str):
     return mode_info.dict()
 
 
+def get_optional_service(interface):
+    """Get service from container, return None if not available"""
+    def dependency():
+        try:
+            return container.get(interface)
+        except ValueError:
+            return None
+    return dependency
+
 @router.post("/create", response_model=CreationResponse)
 async def create(
     request: CreationRequest,
     background_tasks: BackgroundTasks,
     llm_client: ILLMClient = Depends(lambda: container.get(ILLMClient)),
-    cv_pipeline: IComputerVisionPipeline = Depends(lambda: container.get(IComputerVisionPipeline)),
-    cache: ICacheService = Depends(lambda: container.get(ICacheService))
+    cv_pipeline: Optional[IComputerVisionPipeline] = Depends(get_optional_service(IComputerVisionPipeline)),
+    cache: Optional[ICacheService] = Depends(get_optional_service(ICacheService))
 ):
     """
     Unified creation endpoint for all modes.
@@ -208,10 +217,9 @@ immersive 3D environments with interactions and spatial elements."""
     context = "\n\n".join(context_parts)
 
     # Generate specification
-    response = await llm_client.complete(
-        system=system_prompt,
-        user=context + "\n\nGenerate a detailed specification as JSON."
-    )
+    # Combine system and user prompts into single prompt
+    full_prompt = f"{system_prompt}\n\n{context}\n\nGenerate a detailed specification as JSON."
+    response = await llm_client.complete(prompt=full_prompt)
 
     # Parse response (assuming JSON)
     import json

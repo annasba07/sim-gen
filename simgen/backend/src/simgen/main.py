@@ -49,15 +49,51 @@ async def lifespan(app: FastAPI):
         llm_client = LLMClient()
         await llm_client.test_connection()
         logger.info("LLM API connection: OK")
-        
+
+        # Initialize DI container for VirtualForge unified API
+        from .core.container import container
+        from .core.interfaces import ILLMClient, IComputerVisionPipeline, IPhysicsCompiler
+        from .services.mjcf_compiler import MJCFCompiler
+        from .core.modes import mode_registry
+
+        # Register services in DI container
+        container.register(ILLMClient, llm_client)
+
+        # CV pipeline - make optional for testing (requires heavy dependencies)
+        try:
+            from .services.cv_simplified import SimplifiedCVPipeline
+            cv_pipeline = SimplifiedCVPipeline()
+            await cv_pipeline.initialize()
+            container.register(IComputerVisionPipeline, cv_pipeline)
+            logger.info("CV pipeline initialized")
+        except ImportError as e:
+            logger.warning(f"CV pipeline not available (missing dependencies): {e}")
+            logger.info("CV pipeline: SKIPPED (testing mode)")
+
+        physics_compiler = MJCFCompiler()
+        container.register(IPhysicsCompiler, physics_compiler)
+
+        # Register physics compiler in mode registry for VirtualForge
+        mode_registry.register_compiler('physics', physics_compiler)
+
+        logger.info("DI container initialized with all services")
+
     except Exception as e:
         logger.error(f"Startup failed: {e}")
         raise
     
     yield
-    
+
     # Shutdown
     logger.info("Shutting down application")
+
+    # Clean up DI container
+    try:
+        from .core.container import container
+        container.clear()
+        logger.info("DI container cleaned up")
+    except Exception as e:
+        logger.warning(f"DI container cleanup failed: {e}")
 
 
 # Create FastAPI application
