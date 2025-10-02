@@ -35,10 +35,14 @@ async def lifespan(app: FastAPI):
         logger.info("Database connection: SKIPPED (testing mode)")
         
         # Test Redis connection
-        import redis
-        r = redis.from_url(settings.redis_url)
-        r.ping()
-        logger.info("Redis connection: OK")
+        try:
+            import redis
+            r = redis.from_url(settings.redis_url)
+            r.ping()
+            logger.info("Redis connection: OK")
+        except Exception as e:
+            logger.warning(f"Redis connection failed (optional): {e}")
+            logger.info("Redis connection: SKIPPED (testing mode)")
         
         # Test LLM API
         from .services.llm_client import LLMClient
@@ -144,8 +148,11 @@ app.include_router(simulation.router, prefix="/api/v1/simulation", tags=["simula
 app.include_router(templates.router, prefix="/api/v1/templates", tags=["templates"])
 
 # Include new physics pipeline router
-from .api import physics
+from .api import physics, unified_creation
 app.include_router(physics.router, prefix="/api/v2/physics", tags=["physics"])
+
+# Include VirtualForge unified creation API
+app.include_router(unified_creation.router)  # Already has /api/v2 prefix
 
 
 # Root endpoint

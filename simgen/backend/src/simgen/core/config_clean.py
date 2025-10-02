@@ -6,7 +6,7 @@ All settings in one place, loaded from environment variables.
 import os
 from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
@@ -25,10 +25,15 @@ class Settings(BaseSettings):
     # API Server
     host: str = Field(default="0.0.0.0", env="HOST")
     port: int = Field(default=8000, env="PORT")
-    cors_origins: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:80"],
+    cors_origins_str: str = Field(
+        default="http://localhost:3000,http://localhost:80",
         env="CORS_ORIGINS"
     )
+
+    @property
+    def cors_origins(self) -> List[str]:
+        """Parse CORS origins from comma-separated string."""
+        return [origin.strip() for origin in self.cors_origins_str.split(",")]
 
     # Database
     database_url: str = Field(
@@ -113,17 +118,12 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False
+        case_sensitive=False,
+        extra='ignore'  # Ignore extra fields from .env that don't have corresponding model fields
     )
 
-    @validator("cors_origins", pre=True)
-    def parse_cors_origins(cls, v):
-        """Parse CORS origins from comma-separated string."""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
-
-    @validator("environment")
+    @field_validator("environment")
+    @classmethod
     def validate_environment(cls, v):
         """Validate environment value."""
         allowed = ["development", "staging", "production"]
@@ -131,10 +131,11 @@ class Settings(BaseSettings):
             raise ValueError(f"Environment must be one of {allowed}")
         return v
 
-    @validator("secret_key")
-    def validate_secret_key(cls, v, values):
+    @field_validator("secret_key")
+    @classmethod
+    def validate_secret_key(cls, v, info):
         """Ensure secret key is changed in production."""
-        if values.get("environment") == "production" and v == "dev-secret-key-change-in-production":
+        if info.data.get("environment") == "production" and v == "dev-secret-key-change-in-production":
             raise ValueError("Secret key must be changed in production")
         return v
 

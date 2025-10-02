@@ -1,7 +1,7 @@
 # 🧪 VirtualForge Test Results
 
-**Date:** January 2025
-**Status:** ✅ Backend Mode System PASSING | ⏳ API Integration PENDING | ⏳ Frontend PENDING
+**Date:** October 2025
+**Status:** ✅ Backend Mode System PASSING | ✅ API Integration PARTIAL | ⏳ Frontend PENDING
 
 ---
 
@@ -314,4 +314,77 @@ All backend mode system tests passing!
 
 ---
 
-**Bottom Line:** The foundation is solid. We just need to wire everything together! 🚀
+## 🎉 **API Integration Tests - PARTIAL SUCCESS**
+
+### Test Date: October 1, 2025
+
+**Server:** Running on port 8001 (main.py)
+**Status:** GET endpoints working, POST endpoints need DI container
+
+### Working Endpoints ✅
+
+#### 1. GET /api/v2/modes
+**Status:** ✅ WORKING
+**Response:** Returns all 3 modes (Physics, Games, VR) with full metadata
+```json
+{
+    "modes": [...],
+    "default_mode": "physics",
+    "total": 3
+}
+```
+
+#### 2. GET /api/v2/modes/physics
+**Status:** ✅ WORKING
+**Response:** Returns physics mode details with features and engines
+```json
+{
+    "id": "physics",
+    "name": "Physics Lab",
+    "available": true,
+    ...
+}
+```
+
+### Known Issues ⚠️
+
+#### 1. POST /api/v2/create - Dependency Injection Error
+**Status:** ❌ FAILING
+**Error:** `ValueError: Service ILLMClient is not registered`
+
+**Root Cause:**
+- unified_creation.py uses DI container (`container.get(ILLMClient)`)
+- main.py doesn't initialize DI container (only main_clean.py does)
+- main.py is simpler and uses direct service instantiation
+
+**Fix Options:**
+1. Add DI container setup to main.py (simple but duplicates code)
+2. Update unified_creation.py to not use DI (breaks abstraction)
+3. Use main_clean.py (requires fixing all import/dependency issues)
+
+### Integration Summary
+
+**What Works:**
+- ✅ Server starts successfully (main.py)
+- ✅ Unified creation router registered
+- ✅ Mode listing endpoint functional
+- ✅ Mode details endpoint functional
+- ✅ Router routing working correctly
+- ✅ Pydantic models validated
+
+**What Doesn't Work:**
+- ❌ Creation endpoint (needs DI container)
+- ❌ Compiler registration (not done in main.py)
+- ❌ LLM client integration (DI dependency)
+- ❌ CV pipeline integration (DI dependency)
+
+**Next Steps:**
+1. Either fix main_clean.py imports OR
+2. Add minimal DI setup to main.py OR
+3. Refactor unified_creation to use FastAPI dependencies without custom DI
+
+**Recommendation:** Add minimal DI setup to main.py (fastest path to working system)
+
+---
+
+**Bottom Line:** The foundation is solid. API routing works. Just need to connect the services! 🚀

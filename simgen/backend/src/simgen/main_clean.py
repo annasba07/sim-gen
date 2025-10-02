@@ -18,7 +18,6 @@ from .core.config_clean import settings
 from .core.container import container
 from .core.interfaces import (
     IPhysicsCompiler,
-    ISketchAnalyzer,
     ICacheService,
     IWebSocketManager,
     ILLMClient,
@@ -26,17 +25,14 @@ from .core.interfaces import (
 )
 
 # Service implementations
-from .services.physics.compiler import MJCFCompiler
-from .services.physics.runtime import MuJoCoRuntime
-from .services.physics.streaming import OptimizedBinaryEncoder
-from .services.vision.analyzer import OptimizedSketchAnalyzer
-from .services.ai.llm_client import LLMClient
-from .services.infrastructure.cache import CacheService
-from .services.infrastructure.websocket import RedisWebSocketManager
+from .services.mjcf_compiler import MJCFCompiler
+from .services.llm_client import LLMClient
+from .services.cache_service import CacheService
+from .services.websocket_session_manager import RedisWebSocketManager
 from .services.cv_simplified import SimplifiedCVPipeline
 
 # API routes
-from .api import health, physics_clean, sketch_clean, realtime_feedback, sketch_templates, error_feedback
+from .api import health, physics_clean, sketch_clean, realtime_feedback, sketch_templates, error_feedback, unified_creation
 
 # Middleware
 from .core.validation import validate_request_middleware, rate_limiter
@@ -133,18 +129,17 @@ async def register_dependencies():
     cv_pipeline = SimplifiedCVPipeline()
     container.register(IComputerVisionPipeline, cv_pipeline)
 
-    # Sketch analyzer with dependencies
-    sketch_analyzer = OptimizedSketchAnalyzer(
-        llm_client=llm_client,
-        enable_caching=True
-    )
-    container.register(ISketchAnalyzer, sketch_analyzer)
-
     # Infrastructure services
     container.register(ICacheService, container._cache_service)
     container.register(IWebSocketManager, container._ws_manager)
 
-    logger.info("Dependencies registered")
+    # Register mode compilers for VirtualForge
+    from .core.modes import mode_registry
+
+    physics_compiler = container.get(IPhysicsCompiler)
+    mode_registry.register_compiler('physics', physics_compiler)
+
+    logger.info("Dependencies registered (including mode compilers)")
 
 
 async def start_background_tasks():
@@ -224,6 +219,7 @@ def create_application() -> FastAPI:
     app.include_router(realtime_feedback.router)
     app.include_router(sketch_templates.router)
     app.include_router(error_feedback.router)
+    app.include_router(unified_creation.router)  # VirtualForge unified API
 
     # Exception handlers
     @app.exception_handler(ValidationError)
