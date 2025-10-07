@@ -1,95 +1,70 @@
-"use client"
+"use client";
 
-import React, { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ModeSelector } from '@/components/shared/mode-selector'
-import { SketchCanvas } from '@/components/sketch-canvas'
-import { SimulationViewer } from '@/components/simulation-viewer'
-import { Button } from '@/components/ui/button'
-import { useMode } from '@/hooks/use-mode'
-import {
-  ArrowLeft,
-  Sparkles,
-  Wand2,
-  Play,
-  Download,
-  Share2,
-  Settings
-} from 'lucide-react'
+import { useState } from 'react';
+import { Sparkles, ArrowLeft } from 'lucide-react';
+import { ModeSelector } from '@/components/shared/mode-selector';
+import GameCreator from '@/components/games/game-creator';
+import { useMode } from '@/hooks/use-mode';
+
+// Helper functions
+function getModeIcon(mode: string) {
+  const icons: Record<string, string> = {
+    physics: '🔬',
+    games: '🎮',
+    vr: '🌐',
+  };
+  return icons[mode] || '✨';
+}
+
+function getModeName(mode: string) {
+  const names: Record<string, string> = {
+    physics: 'Physics Lab',
+    games: 'Game Studio',
+    vr: 'VR Worlds',
+  };
+  return names[mode] || 'Unknown';
+}
 
 export default function VirtualForgePage() {
-  const { currentMode, setMode } = useMode()
-  const [showModeSelector, setShowModeSelector] = useState(true)
-  const [prompt, setPrompt] = useState('')
-  const [sketchData, setSketchData] = useState('')
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [result, setResult] = useState<any>(null)
+  const { currentMode, setMode } = useMode();
+  const [showModeSelector, setShowModeSelector] = useState(true);
 
   const handleModeSelect = (modeId: string) => {
-    setMode(modeId as any)
-    setShowModeSelector(false)
-  }
+    setMode(modeId as any);
+    setShowModeSelector(false);
+  };
 
   const handleBackToModeSelector = () => {
-    setShowModeSelector(true)
-    setResult(null)
-  }
-
-  const handleGenerate = async () => {
-    setIsGenerating(true)
-
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v2/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: currentMode,
-          prompt,
-          sketch_data: sketchData ? sketchData.split(',')[1] : null
-        })
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setResult(data)
-      } else {
-        alert(`Generation failed: ${data.errors?.join(', ')}`)
-      }
-    } catch (error) {
-      console.error('Generation error:', error)
-      alert('Failed to generate. Please try again.')
-    } finally {
-      setIsGenerating(false)
-    }
-  }
+    setShowModeSelector(true);
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 dark:from-gray-950 dark:via-purple-950 dark:to-slate-950">
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {!showModeSelector && (
               <button
                 onClick={handleBackToModeSelector}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                aria-label="Back to mode selector"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
               </button>
             )}
 
             <div className="flex items-center gap-2">
-              <Sparkles className="w-6 h-6 text-purple-600" />
-              <h1 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+              <Sparkles className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              <h1 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 bg-clip-text text-transparent">
                 VirtualForge
               </h1>
             </div>
 
             {!showModeSelector && (
-              <div className="flex items-center gap-2 ml-4 px-3 py-1 bg-purple-100 rounded-full">
+              <div className="flex items-center gap-2 ml-4 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 rounded-full">
                 <span className="text-2xl">{getModeIcon(currentMode)}</span>
-                <span className="text-sm font-semibold text-purple-700">
+                <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">
                   {getModeName(currentMode)}
                 </span>
               </div>
@@ -97,224 +72,124 @@ export default function VirtualForgePage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm">
-              My Projects
-            </Button>
-            <Button variant="ghost" size="sm">
-              <Settings className="w-4 h-4" />
-            </Button>
+            <a
+              href="https://docs.virtualforge.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+            >
+              Docs
+            </a>
+            <a
+              href="https://github.com/virtualforge"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+            >
+              GitHub
+            </a>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-12">
-        <AnimatePresence mode="wait">
-          {showModeSelector ? (
-            <motion.div
-              key="mode-selector"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <ModeSelector
-                onSelectMode={handleModeSelect}
-                selectedMode={currentMode}
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="creator"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-8"
-            >
-              {/* Creation Interface */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Input Section */}
-                <div className="space-y-6">
-                  {/* Prompt Input */}
-                  <div className="space-y-3">
-                    <label className="text-sm font-semibold text-gray-700">
-                      Describe What You Want to Create
-                    </label>
-                    <textarea
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      placeholder={getPlaceholder(currentMode)}
-                      className="w-full h-32 p-4 border-2 border-gray-200 rounded-xl focus:ring-2
-                        focus:ring-purple-500 focus:border-transparent resize-none text-gray-700"
-                    />
-                  </div>
-
-                  {/* Sketch Canvas */}
-                  <div className="space-y-3">
-                    <label className="text-sm font-semibold text-gray-700">
-                      Sketch Your Idea (Optional)
-                    </label>
-                    <SketchCanvas
-                      width={500}
-                      height={300}
-                      onSketchChange={setSketchData}
-                      className="w-full"
-                    />
-                  </div>
-
-                  {/* Generate Button */}
-                  <Button
-                    onClick={handleGenerate}
-                    disabled={isGenerating || !prompt}
-                    size="lg"
-                    className="w-full bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600
-                      hover:to-blue-700 text-white font-semibold"
-                  >
-                    {isGenerating ? (
-                      <div className="flex items-center gap-3">
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Creating...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <Wand2 className="w-5 h-5" />
-                        <span>Generate {getModeName(currentMode)}</span>
-                      </div>
-                    )}
-                  </Button>
-                </div>
-
-                {/* Output Section */}
-                <div className="space-y-6">
-                  <label className="text-sm font-semibold text-gray-700">
-                    Preview
-                  </label>
-
-                  {result ? (
-                    <ResultDisplay result={result} mode={currentMode} />
-                  ) : (
-                    <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 h-96 flex items-center justify-center">
-                      <div className="text-center space-y-3">
-                        <div className="text-6xl">{getModeIcon(currentMode)}</div>
-                        <p className="text-gray-500">
-                          Your {getModeName(currentMode).toLowerCase()} will appear here
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
+      <main className="h-[calc(100vh-73px)]">
+        {showModeSelector ? (
+          /* Mode Selection Screen */
+          <div className="h-full flex items-center justify-center p-6">
+            <div className="max-w-6xl w-full">
+              <div className="text-center mb-12">
+                <h2 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 dark:from-purple-400 dark:via-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                  What do you want to create?
+                </h2>
+                <p className="text-lg text-gray-600 dark:text-gray-400">
+                  Choose your creation mode and bring your ideas to life with AI
+                </p>
               </div>
 
-              {/* Mode-specific tips */}
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <h3 className="font-semibold text-blue-900 mb-2">💡 Tips for {getModeName(currentMode)}</h3>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  {getModeTips(currentMode).map((tip, i) => (
-                    <li key={i}>• {tip}</li>
-                  ))}
-                </ul>
+              <ModeSelector onSelect={handleModeSelect} />
+
+              <div className="mt-12 text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-500">
+                  ✨ Powered by Claude AI • Phaser 3 • MuJoCo • Three.js
+                </p>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </div>
+        ) : (
+          /* Creation Interface - Mode-specific */
+          <div className="h-full">
+            {currentMode === 'physics' && (
+              <PhysicsCreator onBack={handleBackToModeSelector} />
+            )}
+
+            {currentMode === 'games' && (
+              <GameCreator onBack={handleBackToModeSelector} />
+            )}
+
+            {currentMode === 'vr' && (
+              <VRComingSoon onBack={handleBackToModeSelector} />
+            )}
+          </div>
+        )}
       </main>
     </div>
-  )
+  );
 }
 
-function ResultDisplay({ result, mode }: { result: any; mode: string }) {
-  if (mode === 'physics') {
-    return (
-      <div className="space-y-4">
-        <SimulationViewer mjcfContent={result.output.mjcf_xml} />
-        <div className="flex gap-2">
-          <Button size="sm" className="flex-1">
-            <Play className="w-4 h-4 mr-2" />
-            Run Simulation
-          </Button>
-          <Button size="sm" variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button size="sm" variant="outline">
-            <Share2 className="w-4 h-4 mr-2" />
-            Share
-          </Button>
-        </div>
+// Placeholder for Physics Creator (you already have this)
+function PhysicsCreator({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-950">
+      <div className="text-center p-8">
+        <div className="text-6xl mb-4">🔬</div>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          Physics Lab
+        </h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-6">
+          Physics creation UI coming soon!
+        </p>
+        <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
+          (Use the main app page for physics simulations for now)
+        </p>
+        <button
+          onClick={onBack}
+          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+        >
+          Back to Modes
+        </button>
       </div>
-    )
-  }
+    </div>
+  );
+}
 
-  if (mode === 'games') {
-    return (
-      <div className="space-y-4">
-        <div className="bg-white rounded-xl border-2 border-gray-200 h-96 flex items-center justify-center">
-          <p className="text-gray-500">Game preview coming soon</p>
+// VR Coming Soon placeholder
+function VRComingSoon({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="h-full flex items-center justify-center bg-gradient-to-br from-green-50 to-teal-50 dark:from-gray-900 dark:to-green-950">
+      <div className="text-center p-8">
+        <div className="text-6xl mb-4">🌐</div>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          VR Worlds
+        </h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
+          Coming Soon in Q2 2025
+        </p>
+        <div className="inline-block px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm font-medium mb-6">
+          🚧 Under Development
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" className="flex-1">
-            <Play className="w-4 h-4 mr-2" />
-            Play Game
-          </Button>
-          <Button size="sm" variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button size="sm" variant="outline">
-            <Share2 className="w-4 h-4 mr-2" />
-            Share
-          </Button>
+        <div className="max-w-md mx-auto mb-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Create immersive VR experiences with spatial audio, interactions, and multiplayer spaces.
+          </p>
         </div>
+        <button
+          onClick={onBack}
+          className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
+        >
+          Back to Modes
+        </button>
       </div>
-    )
-  }
-
-  return <div>Result preview for {mode}</div>
-}
-
-function getModeIcon(mode: string): string {
-  const icons: Record<string, string> = {
-    physics: '🔬',
-    games: '🎮',
-    vr: '🌐'
-  }
-  return icons[mode] || '✨'
-}
-
-function getModeName(mode: string): string {
-  const names: Record<string, string> = {
-    physics: 'Physics Simulation',
-    games: 'Game',
-    vr: 'VR Experience'
-  }
-  return names[mode] || 'Creation'
-}
-
-function getPlaceholder(mode: string): string {
-  const placeholders: Record<string, string> = {
-    physics: 'Example: Create a pendulum that swings back and forth with adjustable gravity...',
-    games: 'Example: Make a platformer where a cat collects stars while avoiding robots...',
-    vr: 'Example: Build a virtual art gallery where users can walk around and view paintings...'
-  }
-  return placeholders[mode] || 'Describe what you want to create...'
-}
-
-function getModeTips(mode: string): string[] {
-  const tips: Record<string, string[]> = {
-    physics: [
-      'Be specific about object properties (mass, size, material)',
-      'Describe the physics behavior you want to see',
-      'Sketching helps AI understand spatial relationships'
-    ],
-    games: [
-      'Describe the player character and controls',
-      'Mention enemies, obstacles, and collectibles',
-      'Specify the win/lose conditions'
-    ],
-    vr: [
-      'Describe the environment and atmosphere',
-      'Mention interactive elements',
-      'Think about user navigation and perspective'
-    ]
-  }
-  return tips[mode] || []
+    </div>
+  );
 }

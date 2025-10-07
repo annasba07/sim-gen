@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 # Configuration
 from .core.config_clean import settings
@@ -32,7 +33,7 @@ from .services.websocket_session_manager import RedisWebSocketManager
 from .services.cv_simplified import SimplifiedCVPipeline
 
 # API routes
-from .api import health, physics_clean, sketch_clean, realtime_feedback, sketch_templates, error_feedback, unified_creation
+from .api import health, physics_clean, sketch_clean, realtime_feedback, sketch_templates, error_feedback, unified_creation, games
 
 # Middleware
 from .core.validation import validate_request_middleware, rate_limiter
@@ -135,11 +136,17 @@ async def register_dependencies():
 
     # Register mode compilers for VirtualForge
     from .core.modes import mode_registry
+    from .modes.games import PhaserCompiler
 
+    # Physics mode compiler
     physics_compiler = container.get(IPhysicsCompiler)
     mode_registry.register_compiler('physics', physics_compiler)
 
-    logger.info("Dependencies registered (including mode compilers)")
+    # Games mode compiler
+    games_compiler = PhaserCompiler()
+    mode_registry.register_compiler('games', games_compiler)
+
+    logger.info("Dependencies registered (including mode compilers: physics, games)")
 
 
 async def start_background_tasks():
@@ -220,6 +227,7 @@ def create_application() -> FastAPI:
     app.include_router(sketch_templates.router)
     app.include_router(error_feedback.router)
     app.include_router(unified_creation.router)  # VirtualForge unified API
+    app.include_router(games.router)  # Games API (Phaser compiler)
 
     # Exception handlers
     @app.exception_handler(ValidationError)
