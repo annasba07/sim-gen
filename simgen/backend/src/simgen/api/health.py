@@ -13,7 +13,8 @@ import os
 
 from ..core.config_clean import settings
 from ..database.connection_pool import get_connection_pool
-from ..services.cache_service import get_cache_service
+# TEMPORARY: Cache service disabled for local testing
+# from ..services.cache_service import get_cache_service
 from ..services.websocket_session_manager import get_websocket_manager
 from ..core.resource_manager import resource_manager
 
@@ -79,7 +80,9 @@ async def health_check(response: Response) -> Dict[str, Any]:
 
     # Check Redis connection
     try:
-        cache = await get_cache_service()
+        # TEMPORARY: Cache disabled for local testing
+        # cache = await get_cache_service()
+        cache = None  # Disabled
         if cache.redis_client:
             await cache.redis_client.ping()
             checks["redis"] = "ok"
@@ -155,7 +158,9 @@ async def detailed_health_check() -> Dict[str, Any]:
 
     # Cache statistics
     try:
-        cache = await get_cache_service()
+        # TEMPORARY: Cache disabled for local testing
+        # cache = await get_cache_service()
+        cache = None  # Disabled
         detailed["cache_stats"] = cache.get_stats()
     except:
         detailed["cache_stats"] = {}
@@ -214,7 +219,9 @@ async def readiness_check() -> Dict[str, Any]:
 
     # Cache service ready
     try:
-        cache = await get_cache_service()
+        # TEMPORARY: Cache disabled for local testing
+        # cache = await get_cache_service()
+        cache = None  # Disabled
         checks["cache_service"] = cache is not None
         ready = ready and checks["cache_service"]
     except:
@@ -332,7 +339,9 @@ async def metrics_endpoint() -> Response:
 
     # Cache stats
     try:
-        cache = await get_cache_service()
+        # TEMPORARY: Cache disabled for local testing
+        # cache = await get_cache_service()
+        cache = None  # Disabled
         cache_stats = cache.get_stats()
         metrics.append(f"# HELP cache_hits Cache hit count")
         metrics.append(f"# TYPE cache_hits counter")

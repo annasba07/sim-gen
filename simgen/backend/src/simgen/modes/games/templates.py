@@ -4,7 +4,7 @@ Pre-built game specs that users can customize.
 """
 
 from typing import List, Dict
-from .models import GameSpec, SpriteAsset, GameEntity, GameBehavior, GameMechanic, GameRule, UIElement, Assets, WorldConfig, PhysicsConfig
+from .models import GameSpec, SpriteAsset, Entity, Behavior, Mechanic, Rule, UIElement, Assets, WorldConfig, PhysicsConfig
 
 # ============================================================================
 # Template 1: Coin Collector (Platformer)
@@ -33,7 +33,7 @@ COIN_COLLECTOR_TEMPLATE = GameSpec(
     ),
 
     entities=[
-        GameEntity(
+        Entity(
             id="player",
             type="player",
             sprite="player",
@@ -41,7 +41,7 @@ COIN_COLLECTOR_TEMPLATE = GameSpec(
             y=400,
             physics=PhysicsConfig(enabled=True, bounce=0.2)
         ),
-        GameEntity(
+        Entity(
             id="ground",
             type="platform",
             sprite="platform",
@@ -51,7 +51,7 @@ COIN_COLLECTOR_TEMPLATE = GameSpec(
             height=32,
             physics=PhysicsConfig(enabled=True, static=True)
         ),
-        GameEntity(
+        Entity(
             id="platform1",
             type="platform",
             sprite="platform",
@@ -59,7 +59,7 @@ COIN_COLLECTOR_TEMPLATE = GameSpec(
             y=450,
             physics=PhysicsConfig(enabled=True, static=True)
         ),
-        GameEntity(
+        Entity(
             id="platform2",
             type="platform",
             sprite="platform",
@@ -67,7 +67,7 @@ COIN_COLLECTOR_TEMPLATE = GameSpec(
             y=350,
             physics=PhysicsConfig(enabled=True, static=True)
         ),
-        GameEntity(
+        Entity(
             id="coin1",
             type="item",
             sprite="coin",
@@ -75,7 +75,7 @@ COIN_COLLECTOR_TEMPLATE = GameSpec(
             y=400,
             physics=PhysicsConfig(enabled=True, static=True)
         ),
-        GameEntity(
+        Entity(
             id="coin2",
             type="item",
             sprite="coin",
@@ -83,7 +83,7 @@ COIN_COLLECTOR_TEMPLATE = GameSpec(
             y=300,
             physics=PhysicsConfig(enabled=True, static=True)
         ),
-        GameEntity(
+        Entity(
             id="coin3",
             type="item",
             sprite="coin",
@@ -94,19 +94,19 @@ COIN_COLLECTOR_TEMPLATE = GameSpec(
     ],
 
     behaviors=[
-        GameBehavior(
+        Behavior(
             id="player_movement",
             type="movement_keyboard",
             entityId="player",
             config={"keys": "arrows", "speed": 200}
         ),
-        GameBehavior(
+        Behavior(
             id="player_jump",
             type="jump",
             entityId="player",
             config={"key": "space", "velocity": -400, "doubleJump": False}
         ),
-        GameBehavior(
+        Behavior(
             id="collect_coins",
             type="collect",
             entityId="player",
@@ -119,14 +119,14 @@ COIN_COLLECTOR_TEMPLATE = GameSpec(
     ],
 
     mechanics=[
-        GameMechanic(
+        Mechanic(
             type="score_system",
             config={"initialScore": 0, "displayPosition": {"x": 20, "y": 20}}
         )
     ],
 
     rules=[
-        GameRule(
+        Rule(
             type="win",
             condition={"type": "score_reaches", "value": 30},
             action="showMessage"
@@ -165,7 +165,7 @@ DUNGEON_EXPLORER_TEMPLATE = GameSpec(
     ),
 
     entities=[
-        GameEntity(
+        Entity(
             id="player",
             type="player",
             sprite="player",
@@ -174,7 +174,7 @@ DUNGEON_EXPLORER_TEMPLATE = GameSpec(
             physics=PhysicsConfig(enabled=True)
         ),
         # Walls
-        GameEntity(
+        Entity(
             id="wall_top",
             type="platform",
             sprite="wall",
@@ -184,7 +184,7 @@ DUNGEON_EXPLORER_TEMPLATE = GameSpec(
             height=32,
             physics=PhysicsConfig(enabled=True, static=True)
         ),
-        GameEntity(
+        Entity(
             id="wall_bottom",
             type="platform",
             sprite="wall",
@@ -194,7 +194,7 @@ DUNGEON_EXPLORER_TEMPLATE = GameSpec(
             height=32,
             physics=PhysicsConfig(enabled=True, static=True)
         ),
-        GameEntity(
+        Entity(
             id="wall_left",
             type="platform",
             sprite="wall",
@@ -204,7 +204,7 @@ DUNGEON_EXPLORER_TEMPLATE = GameSpec(
             height=600,
             physics=PhysicsConfig(enabled=True, static=True)
         ),
-        GameEntity(
+        Entity(
             id="wall_right",
             type="platform",
             sprite="wall",
@@ -215,7 +215,7 @@ DUNGEON_EXPLORER_TEMPLATE = GameSpec(
             physics=PhysicsConfig(enabled=True, static=True)
         ),
         # Key
-        GameEntity(
+        Entity(
             id="key",
             type="item",
             sprite="key",
@@ -224,7 +224,7 @@ DUNGEON_EXPLORER_TEMPLATE = GameSpec(
             physics=PhysicsConfig(enabled=True, static=True)
         ),
         # Treasure
-        GameEntity(
+        Entity(
             id="treasure",
             type="item",
             sprite="treasure",
@@ -235,13 +235,13 @@ DUNGEON_EXPLORER_TEMPLATE = GameSpec(
     ],
 
     behaviors=[
-        GameBehavior(
+        Behavior(
             id="player_movement",
             type="movement_keyboard",
             entityId="player",
             config={"keys": "wasd", "speed": 150}
         ),
-        GameBehavior(
+        Behavior(
             id="collect_key",
             type="collect",
             entityId="player",
@@ -251,7 +251,7 @@ DUNGEON_EXPLORER_TEMPLATE = GameSpec(
                 "destroyOnCollect": True
             }
         ),
-        GameBehavior(
+        Behavior(
             id="collect_treasure",
             type="collect",
             entityId="player",
@@ -264,14 +264,14 @@ DUNGEON_EXPLORER_TEMPLATE = GameSpec(
     ],
 
     mechanics=[
-        GameMechanic(
+        Mechanic(
             type="score_system",
             config={"initialScore": 0, "displayPosition": {"x": 20, "y": 20}}
         )
     ],
 
     rules=[
-        GameRule(
+        Rule(
             type="win",
             condition={"type": "score_reaches", "value": 150},
             action="showMessage"
@@ -309,7 +309,7 @@ SPACE_SHOOTER_TEMPLATE = GameSpec(
     ),
 
     entities=[
-        GameEntity(
+        Entity(
             id="player",
             type="player",
             sprite="player",
@@ -317,7 +317,7 @@ SPACE_SHOOTER_TEMPLATE = GameSpec(
             y=500,
             physics=PhysicsConfig(enabled=True)
         ),
-        GameEntity(
+        Entity(
             id="enemy1",
             type="enemy",
             sprite="enemy",
@@ -325,7 +325,7 @@ SPACE_SHOOTER_TEMPLATE = GameSpec(
             y=100,
             physics=PhysicsConfig(enabled=True)
         ),
-        GameEntity(
+        Entity(
             id="enemy2",
             type="enemy",
             sprite="enemy",
@@ -333,7 +333,7 @@ SPACE_SHOOTER_TEMPLATE = GameSpec(
             y=100,
             physics=PhysicsConfig(enabled=True)
         ),
-        GameEntity(
+        Entity(
             id="enemy3",
             type="enemy",
             sprite="enemy",
@@ -344,13 +344,13 @@ SPACE_SHOOTER_TEMPLATE = GameSpec(
     ],
 
     behaviors=[
-        GameBehavior(
+        Behavior(
             id="player_movement",
             type="movement_keyboard",
             entityId="player",
             config={"keys": "arrows", "speed": 250}
         ),
-        GameBehavior(
+        Behavior(
             id="player_shoot",
             type="shoot",
             entityId="player",
@@ -362,7 +362,7 @@ SPACE_SHOOTER_TEMPLATE = GameSpec(
                 "direction": "right"
             }
         ),
-        GameBehavior(
+        Behavior(
             id="enemy1_patrol",
             type="patrol",
             entityId="enemy1",
@@ -375,23 +375,23 @@ SPACE_SHOOTER_TEMPLATE = GameSpec(
     ],
 
     mechanics=[
-        GameMechanic(
+        Mechanic(
             type="score_system",
             config={"initialScore": 0, "displayPosition": {"x": 20, "y": 20}}
         ),
-        GameMechanic(
+        Mechanic(
             type="health_system",
             config={"maxHealth": 100, "displayPosition": {"x": 20, "y": 50}}
         ),
     ],
 
     rules=[
-        GameRule(
+        Rule(
             type="win",
             condition={"type": "score_reaches", "value": 300},
             action="showMessage"
         ),
-        GameRule(
+        Rule(
             type="lose",
             condition={"type": "health_zero"},
             action="showMessage"

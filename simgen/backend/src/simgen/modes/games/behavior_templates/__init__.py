@@ -1,4 +1,4 @@
-"""Behavior code generation templates."""
+"""Game templates package."""
 
 from .behaviors import BehaviorTemplates
 

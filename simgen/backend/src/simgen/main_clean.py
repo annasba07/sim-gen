@@ -28,12 +28,17 @@ from .core.interfaces import (
 # Service implementations
 from .services.mjcf_compiler import MJCFCompiler
 from .services.llm_client import LLMClient
-from .services.cache_service import CacheService
+# TEMPORARY: Cache service disabled for local testing (circular import issue)
+# from .services.cache_service import CacheService
 from .services.websocket_session_manager import RedisWebSocketManager
-from .services.cv_simplified import SimplifiedCVPipeline
+# TEMPORARY: CV pipeline disabled for local testing (missing cv2, easyocr dependencies)
+# from .services.cv_simplified import SimplifiedCVPipeline
 
 # API routes
-from .api import health, physics_clean, sketch_clean, realtime_feedback, sketch_templates, error_feedback, unified_creation, games
+# TEMPORARY: Only import working APIs for local testing
+from .api import health, games
+# Disabled for local testing (missing schema definitions):
+# from .api import physics_clean, sketch_clean, realtime_feedback, sketch_templates, error_feedback, unified_creation
 
 # Middleware
 from .core.validation import validate_request_middleware, rate_limiter
@@ -66,9 +71,10 @@ async def lifespan(app: FastAPI):
         # Start background tasks
         await start_background_tasks()
 
-        # Initialize CV pipeline models asynchronously
-        cv_pipeline = container.get(IComputerVisionPipeline)
-        await cv_pipeline.initialize()
+        # TEMPORARY: CV pipeline disabled for local testing
+        # # Initialize CV pipeline models asynchronously
+        # cv_pipeline = container.get(IComputerVisionPipeline)
+        # await cv_pipeline.initialize()
 
         logger.info("Application started successfully")
         yield
@@ -90,27 +96,33 @@ async def initialize_services():
     """Initialize all services with proper configuration."""
     logger.info("Initializing services...")
 
-    # Initialize cache service
-    cache_service = CacheService(
-        memory_cache_size=settings.cache_memory_size,
-        default_ttl=settings.cache_ttl
-    )
-    await cache_service.initialize(settings.redis_url)
+    # TEMPORARY: Cache service disabled for local testing
+    # # Initialize cache service
+    # cache_service = CacheService(
+    #     memory_cache_size=settings.cache_memory_size,
+    #     default_ttl=settings.cache_ttl
+    # )
+    # await cache_service.initialize(settings.redis_url)
 
-    # Initialize WebSocket manager
-    import redis.asyncio as redis
-    redis_client = redis.from_url(settings.redis_url)
-    ws_manager = RedisWebSocketManager(
-        redis_client=redis_client,
-        server_id=settings.server_id,
-        heartbeat_interval=30,
-        session_ttl=3600
-    )
-    await ws_manager.start()
+    # Initialize WebSocket manager (optional - will fail gracefully if Redis unavailable)
+    try:
+        import redis.asyncio as redis
+        redis_client = redis.from_url(settings.redis_url)
+        ws_manager = RedisWebSocketManager(
+            redis_client=redis_client,
+            server_id=settings.server_id,
+            heartbeat_interval=30,
+            session_ttl=3600
+        )
+        await ws_manager.start()
+        container._ws_manager = ws_manager
+        logger.info("WebSocket manager initialized")
+    except Exception as e:
+        logger.warning(f"WebSocket manager initialization failed (Redis unavailable): {e}")
+        # App can run without WebSocket support for testing
 
     # Store initialized services
-    container._cache_service = cache_service
-    container._ws_manager = ws_manager
+    # container._cache_service = cache_service  # Disabled
 
     logger.info("Services initialized")
 
@@ -126,13 +138,21 @@ async def register_dependencies():
     llm_client = LLMClient()
     container.register(ILLMClient, llm_client)
 
-    # Simplified CV pipeline (replaces 1,118-line custom implementation)
-    cv_pipeline = SimplifiedCVPipeline()
-    container.register(IComputerVisionPipeline, cv_pipeline)
+    # TEMPORARY: CV pipeline disabled for local testing
+    # # Simplified CV pipeline (replaces 1,118-line custom implementation)
+    # cv_pipeline = SimplifiedCVPipeline()
+    # container.register(IComputerVisionPipeline, cv_pipeline)
 
     # Infrastructure services
-    container.register(ICacheService, container._cache_service)
-    container.register(IWebSocketManager, container._ws_manager)
+    # TEMPORARY: Cache service disabled for local testing
+    # container.register(ICacheService, container._cache_service)
+
+    # WebSocket manager (optional - only if initialized successfully)
+    if hasattr(container, '_ws_manager'):
+        container.register(IWebSocketManager, container._ws_manager)
+        logger.info("WebSocket manager registered")
+    else:
+        logger.warning("WebSocket manager not available (running without WebSocket support)")
 
     # Register mode compilers for VirtualForge
     from .core.modes import mode_registry
@@ -221,13 +241,14 @@ def create_application() -> FastAPI:
 
     # Register routers
     app.include_router(health.router)
-    app.include_router(physics_clean.router)
-    app.include_router(sketch_clean.router)
-    app.include_router(realtime_feedback.router)
-    app.include_router(sketch_templates.router)
-    app.include_router(error_feedback.router)
-    app.include_router(unified_creation.router)  # VirtualForge unified API
     app.include_router(games.router)  # Games API (Phaser compiler)
+    # TEMPORARY: Other APIs disabled for local testing
+    # app.include_router(physics_clean.router)
+    # app.include_router(sketch_clean.router)
+    # app.include_router(realtime_feedback.router)
+    # app.include_router(sketch_templates.router)
+    # app.include_router(error_feedback.router)
+    # app.include_router(unified_creation.router)  # VirtualForge unified API
 
     # Exception handlers
     @app.exception_handler(ValidationError)

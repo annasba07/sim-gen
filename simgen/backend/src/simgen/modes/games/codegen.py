@@ -7,7 +7,7 @@ import random
 import logging
 from typing import List, Dict, Any
 from .models import GameSpec, Entity, Behavior, Mechanic, Rule, UIElement
-from .templates import BehaviorTemplates
+from .behavior_templates.behaviors import BehaviorTemplates
 
 logger = logging.getLogger(__name__)
 
