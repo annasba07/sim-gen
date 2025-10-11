@@ -15,7 +15,21 @@
       "Bash(curl:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(git log:*)",
+      "Bash(mkdir:*)",
+      "Bash(python3:*)",
+      "Bash(pytest:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git check-ignore:*)",
+      "Read(//opt/homebrew/Cellar/python@3.13/3.13.7/Frameworks/Python.framework/Versions/3.13/bin/**)",
+      "Bash(source:*)",
+      "Bash(pip install:*)",
+      "Bash(for:*)",
+      "Bash(do)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)"
     ],
     "deny": [],
     "ask": []
