@@ -3,7 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from ..core.config import settings
+from ..core.config_clean import settings
 
 # Convert postgres:// to postgresql:// for SQLAlchemy 2.0
 DATABASE_URL = settings.database_url

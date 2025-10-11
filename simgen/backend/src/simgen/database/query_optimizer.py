@@ -17,7 +17,7 @@ from sqlalchemy import text, select, update, delete, and_, or_
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.config import settings
+from ..core.config_clean import settings
 from ..monitoring.observability import get_observability_manager
 
 

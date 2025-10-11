@@ -12,11 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, AsyncEngin
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool, StaticPool
 from sqlalchemy import event, text
-from sqlalchemy.engine.events import PoolEvents
 from dataclasses import dataclass, field
 from threading import Lock
 
-from ..core.config import settings
+from ..core.config_clean import settings
 from ..monitoring.observability import get_observability_manager
 
 

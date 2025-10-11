@@ -10,7 +10,7 @@ from anthropic import AsyncAnthropic
 import openai
 
 from ..models.physics_spec import PhysicsSpec
-from ..core.config import settings
+from ..core.config_clean import settings
 
 logger = logging.getLogger(__name__)
 

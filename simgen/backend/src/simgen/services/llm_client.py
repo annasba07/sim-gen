@@ -8,7 +8,7 @@ import httpx
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 
-from ..core.config import settings
+from ..core.config_clean import settings
 from ..models.schemas import ExtractedEntities
 
 

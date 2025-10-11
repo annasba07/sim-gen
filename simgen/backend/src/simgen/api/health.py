@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import psutil
 import os
 
-from ..core.config import settings
+from ..core.config_clean import settings
 from ..database.connection_pool import get_connection_pool
 from ..services.cache_service import get_cache_service
 from ..services.websocket_session_manager import get_websocket_manager
