@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Sparkles, Gamepad2, Loader2, AlertCircle } from 'lucide-react';
-import SketchCanvas from '../sketch-canvas';
+import { SketchCanvas } from '../sketch-canvas';
 import GamePreview from './game-preview';
 import { gamesAPI, type GameSpec } from '@/lib/games-api';
 
