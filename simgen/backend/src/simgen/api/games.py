@@ -101,39 +101,42 @@ Behavior types: movement_keyboard, jump, collect, shoot, follow, patrol
 Mechanic types: score_system, health_system, timer
 Use "placeholder" for sprite source. Keep complexity {request.complexity}."""
 
-        user_prompt = f"Create {request.gameType}: {request.prompt}"
+        # Combine system and user prompts
+        combined_prompt = f"{system_prompt}\n\nUser request: Create {request.gameType}: {request.prompt}"
 
-        # Call LLM
-        response = await llm_client.complete(
-            prompt=user_prompt,
-            system_prompt=system_prompt,
-            max_tokens=2500
-        )
-
-        # Parse JSON response with multiple fallback strategies
+        # Try to call LLM (with fallback to template on any error)
         import json
         import re
-
         game_spec = None
 
         try:
-            # Strategy 1: Direct parse
-            game_spec = json.loads(response.strip())
-        except:
+            # Call LLM
+            response = await llm_client.complete(
+                prompt=combined_prompt,
+                max_tokens=2500
+            )
+
+            # Parse JSON response with multiple fallback strategies
             try:
-                # Strategy 2: Extract from markdown code blocks
-                json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
-                if json_match:
-                    game_spec = json.loads(json_match.group(1))
+                # Strategy 1: Direct parse
+                game_spec = json.loads(response.strip())
             except:
                 try:
-                    # Strategy 3: Find first { to last }
-                    start = response.find('{')
-                    end = response.rfind('}') + 1
-                    if start != -1 and end > start:
-                        game_spec = json.loads(response[start:end])
+                    # Strategy 2: Extract from markdown code blocks
+                    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
+                    if json_match:
+                        game_spec = json.loads(json_match.group(1))
                 except:
-                    pass
+                    try:
+                        # Strategy 3: Find first { to last }
+                        start = response.find('{')
+                        end = response.rfind('}') + 1
+                        if start != -1 and end > start:
+                            game_spec = json.loads(response[start:end])
+                    except:
+                        pass
+        except Exception as llm_error:
+            logger.warning(f"LLM call failed: {llm_error}, will use template fallback")
 
         if not game_spec:
             # Fallback to template if LLM fails
