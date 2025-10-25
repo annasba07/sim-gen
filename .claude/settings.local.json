@@ -31,7 +31,8 @@
       "Bash(lsof:*)",
       "Bash(xargs kill:*)",
       "Bash(npm install)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(open /tmp/generated_game.html)"
     ],
     "deny": [],
     "ask": []
