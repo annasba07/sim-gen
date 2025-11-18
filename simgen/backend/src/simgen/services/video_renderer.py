@@ -3,15 +3,20 @@ Video rendering service for physics simulations.
 Renders MuJoCo simulations to MP4 video files.
 """
 
+import asyncio
 import logging
 import tempfile
 import subprocess
 from pathlib import Path
 from typing import Optional, List, Tuple
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import mujoco
 
 logger = logging.getLogger(__name__)
+
+# Thread pool for CPU-intensive rendering tasks
+_render_executor = ThreadPoolExecutor(max_workers=2)
 
 
 class VideoRenderer:
@@ -58,48 +63,21 @@ class VideoRenderer:
             Path to generated video file
         """
         try:
-            # Load model
-            model = mujoco.MjModel.from_xml_string(mjcf_xml)
-            data = mujoco.MjData(model)
-
-            # Create renderer
-            renderer = mujoco.Renderer(model, self.height, self.width)
-
-            # Set camera if specified
-            if camera_name:
-                renderer.update_scene(data, camera=camera_name)
-            else:
-                renderer.update_scene(data)
-
-            # Calculate number of frames
-            dt = model.opt.timestep
-            num_steps = int(duration / dt)
-            frame_skip = max(1, int(1.0 / (self.fps * dt)))
-
-            # Collect frames
-            frames: List[np.ndarray] = []
-            logger.info(f"Rendering {num_steps} simulation steps at {self.fps} fps")
-
-            for step in range(num_steps):
-                # Step simulation
-                mujoco.mj_step(model, data)
-
-                # Render frame at specified FPS
-                if step % frame_skip == 0:
-                    renderer.update_scene(data)
-                    pixels = renderer.render()
-                    # Convert from RGB to BGR for OpenCV/ffmpeg
-                    frames.append(np.flip(pixels, axis=0))
-
-            logger.info(f"Rendered {len(frames)} frames")
-
             # Generate output path
             if output_path is None:
                 temp_dir = tempfile.gettempdir()
                 output_path = str(Path(temp_dir) / f"simulation_{hash(mjcf_xml) % 100000}.mp4")
 
-            # Encode to video using ffmpeg
-            await self._encode_video(frames, output_path)
+            # Run rendering in thread pool to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                _render_executor,
+                self._render_video_sync,
+                mjcf_xml,
+                duration,
+                output_path,
+                camera_name
+            )
 
             logger.info(f"Video saved to {output_path}")
             return output_path
@@ -108,99 +86,159 @@ class VideoRenderer:
             logger.error(f"Video rendering failed: {e}", exc_info=True)
             raise
 
-    async def _encode_video(self, frames: List[np.ndarray], output_path: str):
+    def _render_video_sync(
+        self,
+        mjcf_xml: str,
+        duration: float,
+        output_path: str,
+        camera_name: Optional[str]
+    ):
         """
-        Encode frames to video using ffmpeg.
+        Synchronous video rendering (runs in thread pool).
+        Streams frames directly to ffmpeg to avoid memory issues.
+        """
+        # Load model
+        model = mujoco.MjModel.from_xml_string(mjcf_xml)
+        data = mujoco.MjData(model)
 
-        Args:
-            frames: List of RGB frame arrays
-            output_path: Output video file path
-        """
+        # Create renderer
+        renderer = mujoco.Renderer(model, self.height, self.width)
+
+        # Set camera if specified
+        if camera_name:
+            renderer.update_scene(data, camera=camera_name)
+        else:
+            renderer.update_scene(data)
+
+        # Calculate number of frames
+        dt = model.opt.timestep
+        num_steps = int(duration / dt)
+        frame_skip = max(1, int(1.0 / (self.fps * dt)))
+        expected_frames = num_steps // frame_skip
+
+        logger.info(f"Rendering {expected_frames} frames at {self.fps} fps (streaming to ffmpeg)")
+
+        # Check if ffmpeg is available
+        ffmpeg_available = self._check_ffmpeg()
+
+        if not ffmpeg_available:
+            logger.warning("ffmpeg not found, using imageio fallback (memory intensive)")
+            return self._render_with_imageio(model, data, renderer, num_steps, frame_skip, output_path)
+
+        # Start ffmpeg process to stream frames directly
+        ffmpeg_cmd = [
+            'ffmpeg',
+            '-y',  # Overwrite output
+            '-f', 'rawvideo',
+            '-vcodec', 'rawvideo',
+            '-s', f'{self.width}x{self.height}',
+            '-pix_fmt', 'rgb24',
+            '-r', str(self.fps),
+            '-i', '-',  # Read from stdin
+            '-c:v', self.codec,
+            '-preset', 'medium',
+            '-crf', '23',
+            '-pix_fmt', 'yuv420p',
+            output_path
+        ]
+
+        # Start ffmpeg process
+        process = subprocess.Popen(
+            ffmpeg_cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+
         try:
-            # Check if ffmpeg is available
-            try:
-                subprocess.run(['ffmpeg', '-version'],
-                             capture_output=True,
-                             check=True)
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                logger.warning("ffmpeg not found, falling back to imageio")
-                await self._encode_video_imageio(frames, output_path)
-                return
+            frame_count = 0
+            for step in range(num_steps):
+                # Step simulation
+                mujoco.mj_step(model, data)
 
-            # Create temporary raw video file
-            temp_raw = output_path.replace('.mp4', '_raw.yuv')
+                # Render frame at specified FPS
+                if step % frame_skip == 0:
+                    renderer.update_scene(data)
+                    pixels = renderer.render()
+                    # Flip vertically and write directly to ffmpeg stdin
+                    flipped = np.flip(pixels, axis=0)
+                    process.stdin.write(flipped.tobytes())
+                    frame_count += 1
 
-            # Write frames to raw file
-            height, width = frames[0].shape[:2]
-            with open(temp_raw, 'wb') as f:
-                for frame in frames:
-                    f.write(frame.tobytes())
+            # Close stdin to signal end of stream
+            process.stdin.close()
 
-            # Encode with ffmpeg
-            cmd = [
-                'ffmpeg',
-                '-y',  # Overwrite output
-                '-f', 'rawvideo',
-                '-vcodec', 'rawvideo',
-                '-s', f'{width}x{height}',
-                '-pix_fmt', 'rgb24',
-                '-r', str(self.fps),
-                '-i', temp_raw,
-                '-c:v', self.codec,
-                '-preset', 'medium',
-                '-crf', '23',
-                '-pix_fmt', 'yuv420p',
-                output_path
-            ]
+            # Wait for ffmpeg to finish
+            stdout, stderr = process.communicate(timeout=60)
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
+            if process.returncode != 0:
+                logger.error(f"ffmpeg error: {stderr.decode()}")
+                raise RuntimeError(f"ffmpeg encoding failed: {stderr.decode()}")
 
-            if result.returncode != 0:
-                logger.error(f"ffmpeg error: {result.stderr}")
-                raise RuntimeError(f"ffmpeg encoding failed: {result.stderr}")
-
-            # Clean up temp file
-            Path(temp_raw).unlink(missing_ok=True)
+            logger.info(f"Successfully encoded {frame_count} frames")
 
         except Exception as e:
-            logger.error(f"Video encoding failed: {e}")
+            process.kill()
+            process.wait()
             raise
 
-    async def _encode_video_imageio(self, frames: List[np.ndarray], output_path: str):
-        """
-        Fallback video encoding using imageio (slower but no ffmpeg dependency).
+    def _check_ffmpeg(self) -> bool:
+        """Check if ffmpeg is available."""
+        try:
+            subprocess.run(
+                ['ffmpeg', '-version'],
+                capture_output=True,
+                check=True,
+                timeout=5
+            )
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            return False
 
-        Args:
-            frames: List of RGB frame arrays
-            output_path: Output video file path
+    def _render_with_imageio(
+        self,
+        model,
+        data,
+        renderer,
+        num_steps: int,
+        frame_skip: int,
+        output_path: str
+    ):
+        """
+        Fallback rendering using imageio (loads frames in memory).
+        Only used when ffmpeg is not available.
         """
         try:
             import imageio
-
-            logger.info(f"Encoding video with imageio (fps={self.fps})")
-            writer = imageio.get_writer(
-                output_path,
-                fps=self.fps,
-                codec=self.codec,
-                quality=8,
-                pixelformat='yuv420p'
-            )
-
-            for frame in frames:
-                writer.append_data(frame)
-
-            writer.close()
-
         except ImportError:
             raise RuntimeError(
                 "Neither ffmpeg nor imageio available. "
                 "Install imageio: pip install imageio[ffmpeg]"
             )
+
+        logger.warning("Using imageio fallback - this loads all frames in memory")
+
+        frames = []
+        for step in range(num_steps):
+            mujoco.mj_step(model, data)
+            if step % frame_skip == 0:
+                renderer.update_scene(data)
+                pixels = renderer.render()
+                frames.append(np.flip(pixels, axis=0))
+
+        logger.info(f"Encoding {len(frames)} frames with imageio")
+        writer = imageio.get_writer(
+            output_path,
+            fps=self.fps,
+            codec=self.codec,
+            quality=8,
+            pixelformat='yuv420p'
+        )
+
+        for frame in frames:
+            writer.append_data(frame)
+
+        writer.close()
 
     async def render_gif(
         self,
@@ -224,51 +262,79 @@ class VideoRenderer:
             Path to generated GIF file
         """
         try:
-            import imageio
-
-            # Load model
-            model = mujoco.MjModel.from_xml_string(mjcf_xml)
-            data = mujoco.MjData(model)
-
-            # Create renderer
-            renderer = mujoco.Renderer(model, self.height, self.width)
-
-            if camera_name:
-                renderer.update_scene(data, camera=camera_name)
-            else:
-                renderer.update_scene(data)
-
-            # Calculate frames
-            dt = model.opt.timestep
-            num_steps = int(duration / dt)
-            frame_skip = max(1, int(1.0 / (fps * dt)))
-
-            # Collect frames
-            frames = []
-            for step in range(num_steps):
-                mujoco.mj_step(model, data)
-
-                if step % frame_skip == 0:
-                    renderer.update_scene(data)
-                    pixels = renderer.render()
-                    frames.append(np.flip(pixels, axis=0))
-
             # Generate output path
             if output_path is None:
                 temp_dir = tempfile.gettempdir()
                 output_path = str(Path(temp_dir) / f"simulation_{hash(mjcf_xml) % 100000}.gif")
 
-            # Save as GIF
-            imageio.mimsave(output_path, frames, fps=fps, loop=0)
+            # Run rendering in thread pool to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                _render_executor,
+                self._render_gif_sync,
+                mjcf_xml,
+                duration,
+                output_path,
+                camera_name,
+                fps
+            )
 
             logger.info(f"GIF saved to {output_path}")
             return output_path
 
-        except ImportError:
-            raise RuntimeError("imageio required for GIF export: pip install imageio")
         except Exception as e:
             logger.error(f"GIF rendering failed: {e}")
             raise
+
+    def _render_gif_sync(
+        self,
+        mjcf_xml: str,
+        duration: float,
+        output_path: str,
+        camera_name: Optional[str],
+        fps: int
+    ):
+        """
+        Synchronous GIF rendering (runs in thread pool).
+        Note: GIFs load frames in memory, but are typically short duration.
+        """
+        try:
+            import imageio
+        except ImportError:
+            raise RuntimeError("imageio required for GIF export: pip install imageio")
+
+        # Load model
+        model = mujoco.MjModel.from_xml_string(mjcf_xml)
+        data = mujoco.MjData(model)
+
+        # Create renderer
+        renderer = mujoco.Renderer(model, self.height, self.width)
+
+        if camera_name:
+            renderer.update_scene(data, camera=camera_name)
+        else:
+            renderer.update_scene(data)
+
+        # Calculate frames
+        dt = model.opt.timestep
+        num_steps = int(duration / dt)
+        frame_skip = max(1, int(1.0 / (fps * dt)))
+
+        logger.info(f"Rendering GIF with {num_steps // frame_skip} frames at {fps} fps")
+
+        # Collect frames (acceptable for short GIFs)
+        frames = []
+        for step in range(num_steps):
+            mujoco.mj_step(model, data)
+
+            if step % frame_skip == 0:
+                renderer.update_scene(data)
+                pixels = renderer.render()
+                frames.append(np.flip(pixels, axis=0))
+
+        # Save as GIF
+        imageio.mimsave(output_path, frames, fps=fps, loop=0)
+        logger.info(f"GIF encoding complete: {len(frames)} frames")
 
 
 # Singleton instance

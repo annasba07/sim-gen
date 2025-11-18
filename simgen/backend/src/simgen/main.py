@@ -132,6 +132,10 @@ async def http_exception_handler(request, exc):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
+    # Don't catch HTTPException - let the specific handler deal with it
+    if isinstance(exc, HTTPException):
+        return await http_exception_handler(request, exc)
+
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
