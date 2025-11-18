@@ -6,6 +6,7 @@ Replaces direct MJCF generation with structured intermediate representation
 import asyncio
 import logging
 import uuid
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.responses import JSONResponse, Response
@@ -18,6 +19,8 @@ from ..services.mjcf_compiler import MJCFCompiler
 from ..services.mujoco_runtime import MuJoCoRuntime, SimulationStatus
 from ..services.streaming_protocol import streaming_manager
 from ..services.llm_client import get_llm_client
+from ..services.video_renderer import get_video_renderer
+from ..services.sharing_service import get_sharing_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -531,8 +534,20 @@ async def run_simulation(request: SimulationRequest):
         # Generate video if requested
         video_url = None
         if request.render_video:
-            # TODO: Implement video rendering
-            pass
+            try:
+                video_renderer = get_video_renderer()
+                video_path = await video_renderer.render_video(
+                    mjcf_xml=mjcf_xml,
+                    duration=request.duration
+                )
+                # In production, upload to CDN and return URL
+                # For now, return local file path
+                video_url = f"file://{video_path}"
+                logger.info(f"Video rendered: {video_url}")
+            except Exception as video_error:
+                logger.error(f"Video rendering failed: {video_error}")
+                # Don't fail the entire request if video rendering fails
+                video_url = None
 
         return {
             "success": True,
@@ -612,3 +627,108 @@ async def validate_physics_spec(spec: PhysicsSpec):
         "actuator_count": len(spec.actuators),
         "sensor_count": len(spec.sensors)
     }
+
+
+# ============================================================================
+# Sharing & Social Media Endpoints
+# ============================================================================
+
+class ShareRequest(BaseModel):
+    """Request to create a shareable link."""
+    mjcf_xml: Optional[str] = None
+    physics_spec: Optional[PhysicsSpec] = None
+    title: Optional[str] = Field(default=None, description="Title for social media")
+    description: Optional[str] = Field(default=None, description="Description for social media")
+    thumbnail_url: Optional[str] = Field(default=None, description="URL to preview image")
+
+
+@router.post("/share")
+async def create_share_link(request: ShareRequest):
+    """
+    Create a shareable link for a physics simulation.
+    Returns social media metadata and embed codes.
+    """
+    try:
+        sharing_service = get_sharing_service()
+
+        # Prepare content data
+        content_data = {}
+        if request.mjcf_xml:
+            content_data["mjcf_xml"] = request.mjcf_xml
+        if request.physics_spec:
+            content_data["physics_spec"] = request.physics_spec.model_dump()
+
+        if not content_data:
+            raise HTTPException(
+                status_code=400,
+                detail="Must provide either mjcf_xml or physics_spec"
+            )
+
+        # Create share link
+        share_info = sharing_service.create_share_link(
+            content_type="simulation",
+            content_data=content_data,
+            title=request.title,
+            description=request.description,
+            thumbnail_url=request.thumbnail_url
+        )
+
+        # Generate social platform links
+        social_links = sharing_service.generate_social_share_links(
+            share_url=share_info["share_url"],
+            title=request.title or "Check out my physics simulation!",
+            description=request.description or "Created with SimGen AI"
+        )
+
+        share_info["social_links"] = social_links
+
+        return share_info
+
+    except Exception as e:
+        logger.error(f"Share creation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/share/{share_id}")
+async def get_shared_simulation(share_id: str):
+    """
+    Retrieve a shared simulation by ID.
+    """
+    sharing_service = get_sharing_service()
+    share_data = sharing_service.get_share_data(share_id)
+
+    if not share_data:
+        raise HTTPException(status_code=404, detail="Share not found or expired")
+
+    return share_data
+
+
+@router.get("/export/gif")
+async def export_simulation_gif(
+    mjcf_xml: str,
+    duration: float = 5.0,
+    fps: int = 30
+):
+    """
+    Export simulation as animated GIF.
+    Useful for quick social media sharing.
+    """
+    try:
+        video_renderer = get_video_renderer()
+        gif_path = await video_renderer.render_gif(
+            mjcf_xml=mjcf_xml,
+            duration=duration,
+            fps=fps
+        )
+
+        # In production, upload to CDN
+        # For now, return file path
+        return {
+            "success": True,
+            "gif_url": f"file://{gif_path}",
+            "size_kb": Path(gif_path).stat().st_size / 1024
+        }
+
+    except Exception as e:
+        logger.error(f"GIF export failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
