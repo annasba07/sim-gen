@@ -76,6 +76,12 @@ async def lifespan(app: FastAPI):
         # Register physics compiler in mode registry for VirtualForge
         mode_registry.register_compiler('physics', physics_compiler)
 
+        # Register Phaser compiler for games mode
+        from .modes.games import PhaserCompiler
+        phaser_compiler = PhaserCompiler()
+        mode_registry.register_compiler('games', phaser_compiler)
+        logger.info("Phaser compiler registered for games mode")
+
         logger.info("DI container initialized with all services")
 
     except Exception as e:
@@ -126,6 +132,10 @@ async def http_exception_handler(request, exc):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
+    # Don't catch HTTPException - let the specific handler deal with it
+    if isinstance(exc, HTTPException):
+        return await http_exception_handler(request, exc)
+
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
@@ -184,11 +194,14 @@ app.include_router(simulation.router, prefix="/api/v1/simulation", tags=["simula
 app.include_router(templates.router, prefix="/api/v1/templates", tags=["templates"])
 
 # Include new physics pipeline router
-from .api import physics, unified_creation
+from .api import physics, unified_creation, games
 app.include_router(physics.router, prefix="/api/v2/physics", tags=["physics"])
 
 # Include VirtualForge unified creation API
 app.include_router(unified_creation.router)  # Already has /api/v2 prefix
+
+# Include games/Phaser API
+app.include_router(games.router)  # Already has /api/v2/games prefix
 
 
 # Root endpoint
